@@ -1,0 +1,21 @@
+{
+  "name": "albok",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Desktop class companion: follow imported book sections in class and keep notes by subject.",
+  "scripts": {
+    "setup": "node scripts/setup.mjs",
+    "dev": "concurrently -k -n api,web -c blue,magenta \"npm run backend\" \"npm --prefix frontend run web\"",
+    "desktop:dev": "concurrently -k -n web,desktop -c magenta,green \"npm --prefix frontend run dev\" \"wait-on http-get://localhost:8081 && npm --prefix desktop run dev\"",
+    "desktop": "npm run build:web && npm --prefix desktop start",
+    "backend": "node scripts/backend.mjs serve",
+    "test": "node scripts/backend.mjs test && npm --prefix frontend run typecheck",
+    "build:web": "npm --prefix frontend run build:web",
+    "build:backend": "node scripts/backend.mjs build",
+    "dist:win": "npm run build:web && npm run build:backend && npm --prefix desktop run dist:win"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5",
+    "wait-on": "^9.5.1"
+  }
+}
