@@ -39,3 +39,6 @@ yarn-error.*
 
 expo-env.d.ts
 # @end expo-cli
+# Copied from node_modules by scripts/copy-pdfjs.mjs
+public/pdfjs/*
+!public/pdfjs/loader.mjs

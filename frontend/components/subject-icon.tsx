@@ -1,5 +1,5 @@
 import { Icon } from '@/components/ui/icon';
-import type { Subject } from '@/lib/api';
+import type { SubjectInfo } from '@/lib/api';
 import { subjectIcon, tint } from '@/lib/subjects';
 import { cn } from '@/lib/utils';
 import { View } from 'react-native';
@@ -14,7 +14,7 @@ export function SubjectIcon({
   subject,
   size = 'md',
 }: {
-  subject: Pick<Subject, 'color' | 'icon'>;
+  subject: Pick<SubjectInfo, 'color' | 'icon'>;
   size?: keyof typeof SIZES;
 }) {
   return (

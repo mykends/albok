@@ -2,14 +2,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
-export const READER_FONT_SIZES = { min: 14, max: 28, default: 18 };
+export const READER_ZOOM = { min: 0.6, max: 2.4, step: 0.2, default: 1 };
 
+// Remembered on this device (not per user): zoom, theme and the notes panel.
 type PreferencesState = {
   colorScheme: 'light' | 'dark' | 'system';
-  readerFontSize: number;
+  readerZoom: number;
   notesPanelOpen: boolean;
   setColorScheme: (colorScheme: PreferencesState['colorScheme']) => void;
-  changeReaderFontSize: (delta: number) => void;
+  changeReaderZoom: (direction: 1 | -1) => void;
   toggleNotesPanel: () => void;
 };
 
@@ -17,18 +18,18 @@ export const usePreferencesStore = create<PreferencesState>()(
   persist(
     (set) => ({
       colorScheme: 'system',
-      readerFontSize: READER_FONT_SIZES.default,
+      readerZoom: READER_ZOOM.default,
       notesPanelOpen: true,
       setColorScheme: (colorScheme) => set({ colorScheme }),
-      changeReaderFontSize: (delta) =>
+      changeReaderZoom: (direction) =>
         set((state) => ({
-          readerFontSize: Math.min(
-            READER_FONT_SIZES.max,
-            Math.max(READER_FONT_SIZES.min, state.readerFontSize + delta)
-          ),
+          readerZoom:
+            Math.round(
+              Math.min(READER_ZOOM.max, Math.max(READER_ZOOM.min, state.readerZoom + direction * READER_ZOOM.step)) * 10
+            ) / 10,
         })),
       toggleNotesPanel: () => set((state) => ({ notesPanelOpen: !state.notesPanelOpen })),
     }),
-    { name: 'albok-preferences', storage: createJSONStorage(() => AsyncStorage) }
+    { name: 'albok-preferences', version: 2, storage: createJSONStorage(() => AsyncStorage) }
   )
 );

@@ -1,9 +1,10 @@
-// Exposes the backend URL to the web app (read in frontend/lib/api.ts).
-const { contextBridge } = require('electron');
+// Lets the web app ask the kiosk shell to wipe the session partition at sign-out
+// (read in frontend/stores/session-store.ts).
+const { contextBridge, ipcRenderer } = require('electron');
 
-const apiArg = process.argv.find((arg) => arg.startsWith('--albok-api-url='));
+const kiosk = process.argv.includes('--albok-kiosk=true');
 
-contextBridge.exposeInMainWorld('albok', {
-  apiUrl: apiArg ? apiArg.slice('--albok-api-url='.length) : 'http://127.0.0.1:8765',
-  platform: process.platform,
+contextBridge.exposeInMainWorld('albokKiosk', {
+  kiosk,
+  signOut: () => ipcRenderer.invoke('kiosk:sign-out'),
 });

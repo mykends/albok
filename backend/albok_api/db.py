@@ -3,20 +3,16 @@ from collections.abc import Iterator
 from fastapi import Request
 from sqlalchemy import event
 from sqlalchemy.engine import Engine
-from sqlmodel import Session, SQLModel, create_engine, select
+from sqlmodel import Session, SQLModel, create_engine
 
-from .models import Subject
-
-STARTER_SUBJECTS = [
-    {"name": "Mathematics", "slug": "mathematics", "description": "Algebra, geometry and calculus", "color": "#2563eb", "icon": "calculator"},
-    {"name": "Physics", "slug": "physics", "description": "Mechanics, energy and waves", "color": "#7c3aed", "icon": "atom"},
-    {"name": "Chemistry", "slug": "chemistry", "description": "Elements, reactions and compounds", "color": "#0891b2", "icon": "flask-conical"},
-    {"name": "Biology", "slug": "biology", "description": "Cells, genetics and ecosystems", "color": "#16a34a", "icon": "leaf"},
-    {"name": "History", "slug": "history", "description": "Civilisations, events and people", "color": "#d97706", "icon": "landmark"},
-]
+from . import models  # noqa: F401  (registers the tables)
 
 
 def create_db_engine(database_url: str) -> Engine:
+    if not database_url.startswith("sqlite"):
+        return create_engine(database_url, pool_pre_ping=True)
+
+    # SQLite is for development and tests only.
     engine = create_engine(database_url, connect_args={"check_same_thread": False})
 
     @event.listens_for(engine, "connect")
@@ -30,11 +26,6 @@ def create_db_engine(database_url: str) -> Engine:
 
 def init_db(engine: Engine) -> None:
     SQLModel.metadata.create_all(engine)
-    with Session(engine) as session:
-        if session.exec(select(Subject)).first() is None:
-            for position, subject in enumerate(STARTER_SUBJECTS):
-                session.add(Subject(position=position, **subject))
-            session.commit()
 
 
 def get_session(request: Request) -> Iterator[Session]:

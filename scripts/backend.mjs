@@ -1,4 +1,5 @@
 // Runs backend tasks with the project's virtualenv Python, on Windows, macOS and Linux.
+// `serve` is for development: it signs in through the built-in mock AAI@EduHr provider and seeds demo data.
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -11,10 +12,8 @@ const python =
     : join(backendDir, '.venv', 'bin', 'python');
 
 const TASKS = {
-  serve: ['run.py'],
-  test: ['-m', 'pytest', '-q'],
-  // One folder (not --onefile) so the desktop app can stop a single process cleanly.
-  build: ['-m', 'PyInstaller', '--noconfirm', '--clean', '--onedir', '--name', 'albok-backend', '--collect-submodules', 'uvicorn', 'run.py'],
+  serve: { args: ['run.py'], env: { ALBOK_MOCK_OIDC: '1' } },
+  test: { args: ['-m', 'pytest', '-q'], env: {} },
 };
 
 const task = process.argv[2] ?? 'serve';
@@ -27,5 +26,11 @@ if (!existsSync(python)) {
   process.exit(1);
 }
 
-const result = spawnSync(python, [...TASKS[task], ...process.argv.slice(3)], { cwd: backendDir, stdio: 'inherit' });
+const { args, env } = TASKS[task];
+const result = spawnSync(python, [...args, ...process.argv.slice(3)], {
+  cwd: backendDir,
+  stdio: 'inherit',
+  // Explicit environment variables win over the development defaults.
+  env: { ...env, ...process.env },
+});
 process.exit(result.status ?? 1);

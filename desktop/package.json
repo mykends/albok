@@ -2,12 +2,12 @@
   "name": "albok-desktop",
   "productName": "Albok",
   "version": "0.1.0",
-  "description": "Albok - follow your class book and keep notes by subject",
+  "description": "Albok kiosk shell for school PCs",
   "main": "main.js",
   "private": true,
   "scripts": {
     "start": "electron .",
-    "dev": "cross-env ALBOK_DEV_SERVER_URL=http://localhost:8081 electron .",
+    "dev": "cross-env ALBOK_URL=http://localhost:8081 ALBOK_KIOSK=false ALBOK_AUTH_ORIGINS=http://localhost:8765 electron .",
     "dist:win": "electron-builder --win --x64"
   },
   "build": {
@@ -21,16 +21,6 @@
       "preload.js",
       "package.json"
     ],
-    "extraResources": [
-      {
-        "from": "../frontend/dist",
-        "to": "web"
-      },
-      {
-        "from": "../backend/dist/albok-backend",
-        "to": "backend"
-      }
-    ],
     "win": {
       "target": [
         "nsis"
@@ -39,6 +29,7 @@
     },
     "nsis": {
       "oneClick": false,
+      "perMachine": true,
       "allowToChangeInstallationDirectory": true
     }
   },

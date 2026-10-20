@@ -1,73 +1,57 @@
-import { BookCard } from '@/components/book-card';
 import { EmptyState } from '@/components/empty-state';
-import { ImportBookDialog } from '@/components/import-book-dialog';
-import { ErrorBanner, Grid, Page } from '@/components/layout';
-import { NoteCard } from '@/components/note-card';
-import { NoteEditorDialog } from '@/components/note-editor-dialog';
+import { ErrorBanner, Page } from '@/components/layout';
+import { BooksTab } from '@/components/professor/books-tab';
+import { PresetsTab } from '@/components/professor/presets-tab';
+import { PreviewTab } from '@/components/professor/preview-tab';
+import { SettingsTab } from '@/components/professor/settings-tab';
+import { useBooks } from '@/components/professor/use-books';
 import { SubjectIcon } from '@/components/subject-icon';
-import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
-import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Text } from '@/components/ui/text';
-import type { Note } from '@/lib/api';
-import { useBooksStore } from '@/stores/books-store';
-import { useNotesStore } from '@/stores/notes-store';
-import { useSubject, useSubjectsStore } from '@/stores/subjects-store';
+import { api, type ProfessorSubject } from '@/lib/api';
+import { errorMessage } from '@/lib/i18n';
+import { useProfessor } from '@/stores/professor-store';
 import { useLocalSearchParams } from 'expo-router';
 import Head from 'expo-router/head';
-import { CircleAlert, Library, NotebookPen, Search, StickyNote, Upload } from 'lucide-react-native';
-import { useEffect, useMemo, useState } from 'react';
+import { CircleAlert, Eye, Library, ListChecks, Settings } from 'lucide-react-native';
+import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
-type Tab = 'books' | 'notes';
-type NoteDialogState = { open: false } | { open: true; note: Note | null };
+type Tab = 'books' | 'presets' | 'preview' | 'settings';
 
 export default function SubjectScreen() {
-  const params = useLocalSearchParams<{ subjectId: string; tab?: string }>();
-  const subjectId = Number(params.subjectId);
-  const subject = useSubject(subjectId);
-  const subjectsStatus = useSubjectsStore((state) => state.status);
-
-  const books = useBooksStore((state) => state.booksBySubject[subjectId]);
-  const booksError = useBooksStore((state) => state.booksErrors[subjectId]);
-  const fetchBooks = useBooksStore((state) => state.fetchBooks);
-  const notes = useNotesStore((state) => state.notesBySubject[subjectId]);
-  const notesError = useNotesStore((state) => state.notesErrors[subjectId]);
-  const fetchNotes = useNotesStore((state) => state.fetchNotes);
-
+  const { t } = useTranslation();
+  const subjectId = Number(useLocalSearchParams<{ subjectId: string }>().subjectId);
+  const replaceSubject = useProfessor((state) => state.replaceSubject);
+  const [subject, setSubject] = useState<ProfessorSubject | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('books');
-  const [importOpen, setImportOpen] = useState(false);
-  const [noteDialog, setNoteDialog] = useState<NoteDialogState>({ open: false });
-  const [query, setQuery] = useState('');
+  const books = useBooks(subjectId);
 
   useEffect(() => {
-    fetchBooks(subjectId);
-    fetchNotes(subjectId);
-    setQuery('');
-  }, [subjectId, fetchBooks, fetchNotes]);
+    setSubject(null);
+    setError(null);
+    setTab('books');
+    api
+      .subject(subjectId)
+      .then(setSubject)
+      .catch((e) => setError(errorMessage(e)));
+  }, [subjectId]);
 
-  useEffect(() => {
-    setTab(params.tab === 'notes' ? 'notes' : 'books');
-  }, [subjectId, params.tab]);
-
-  const filteredNotes = useMemo(() => {
-    const term = query.trim().toLowerCase();
-    if (!notes || !term) return notes;
-    return notes.filter((note) =>
-      [note.title, note.content, note.section_title ?? ''].some((field) => field.toLowerCase().includes(term))
+  if (error) {
+    return (
+      <Page>
+        <EmptyState icon={CircleAlert} title={t('professor.subjectUnavailable')} description={error} />
+      </Page>
     );
-  }, [notes, query]);
-
+  }
   if (!subject) {
     return (
       <Page>
-        {subjectsStatus === 'loading' || subjectsStatus === 'idle' ? (
-          <Skeleton className="h-16 w-80 rounded-xl" />
-        ) : (
-          <EmptyState icon={CircleAlert} title="Subject not found" description="It may have been removed." />
-        )}
+        <Skeleton className="h-16 w-80 rounded-xl" />
       </Page>
     );
   }
@@ -77,106 +61,55 @@ export default function SubjectScreen() {
       <Head>
         <title>{`${subject.name} · Albok`}</title>
       </Head>
-
       <View className="flex-row flex-wrap items-center gap-4">
         <SubjectIcon subject={subject} size="lg" />
         <View className="min-w-48 flex-1">
           <Text className="text-3xl font-bold tracking-tight">{subject.name}</Text>
-          <Text className="text-muted-foreground">{subject.description}</Text>
-        </View>
-        <View className="flex-row gap-2">
-          <Button variant="outline" onPress={() => setNoteDialog({ open: true, note: null })}>
-            <Icon as={NotebookPen} />
-            <Text>New note</Text>
-          </Button>
-          <Button onPress={() => setImportOpen(true)}>
-            <Icon as={Upload} />
-            <Text>Import book</Text>
-          </Button>
+          <Text className="text-muted-foreground">
+            {subject.classes.length ? subject.classes.map((c) => c.name).join(', ') : t('professor.noClassesThisYear')}
+          </Text>
         </View>
       </View>
+      {books.error && <ErrorBanner message={books.error} onRetry={books.refresh} />}
 
       <Tabs value={tab} onValueChange={(value) => setTab(value as Tab)} className="gap-6">
         <TabsList>
           <TabsTrigger value="books" className="px-3">
             <Icon as={Library} size={14} />
-            <Text>Book sections</Text>
+            <Text>{t('professor.tabs.books')}</Text>
           </TabsTrigger>
-          <TabsTrigger value="notes" className="px-3">
-            <Icon as={StickyNote} size={14} />
-            <Text>Notes{notes ? ` (${notes.length})` : ''}</Text>
+          <TabsTrigger value="presets" className="px-3">
+            <Icon as={ListChecks} size={14} />
+            <Text>{t('professor.tabs.presets')}</Text>
+          </TabsTrigger>
+          <TabsTrigger value="preview" className="px-3">
+            <Icon as={Eye} size={14} />
+            <Text>{t('professor.tabs.preview')}</Text>
+          </TabsTrigger>
+          <TabsTrigger value="settings" className="px-3">
+            <Icon as={Settings} size={14} />
+            <Text>{t('professor.tabs.settings')}</Text>
           </TabsTrigger>
         </TabsList>
-
         <TabsContent value="books" className="gap-4">
-          {booksError ? (
-            <ErrorBanner message={booksError} onRetry={() => fetchBooks(subjectId)} />
-          ) : !books ? (
-            [0, 1].map((n) => <Skeleton key={n} className="h-48 rounded-xl" />)
-          ) : books.length === 0 ? (
-            <EmptyState
-              icon={Library}
-              title="No books yet"
-              description={`Import the ${subject.name.toLowerCase()} book or handout you use in class. PDF, Word, text and Markdown files work.`}>
-              <Button onPress={() => setImportOpen(true)} className="mt-2">
-                <Icon as={Upload} />
-                <Text>Import book</Text>
-              </Button>
-            </EmptyState>
-          ) : (
-            books.map((book) => <BookCard key={book.id} book={book} subject={subject} />)
-          )}
+          <BooksTab subject={subject} books={books} />
         </TabsContent>
-
-        <TabsContent value="notes" className="gap-4">
-          {notesError ? (
-            <ErrorBanner message={notesError} onRetry={() => fetchNotes(subjectId)} />
-          ) : !filteredNotes ? (
-            <Skeleton className="h-32 rounded-xl" />
-          ) : notes?.length === 0 ? (
-            <EmptyState
-              icon={StickyNote}
-              title="No notes yet"
-              description="Write notes here, or take them while reading a section in class. They stay organised by subject.">
-              <Button onPress={() => setNoteDialog({ open: true, note: null })} className="mt-2">
-                <Icon as={NotebookPen} />
-                <Text>New note</Text>
-              </Button>
-            </EmptyState>
-          ) : (
-            <>
-              <View className="max-w-md justify-center">
-                <Input placeholder="Search notes…" value={query} onChangeText={setQuery} className="pl-9" />
-                <View className="absolute left-3" pointerEvents="none">
-                  <Icon as={Search} size={16} className="text-muted-foreground" />
-                </View>
-              </View>
-              {filteredNotes.length === 0 ? (
-                <Text className="text-muted-foreground">No notes match “{query.trim()}”.</Text>
-              ) : (
-                <Grid minItemWidth={280}>
-                  {filteredNotes.map((note) => (
-                    <NoteCard
-                      key={note.id}
-                      note={note}
-                      onPress={() => setNoteDialog({ open: true, note })}
-                      className="h-full"
-                    />
-                  ))}
-                </Grid>
-              )}
-            </>
-          )}
+        <TabsContent value="presets" className="gap-4">
+          {tab === 'presets' && <PresetsTab subject={subject} books={books.books ?? []} onApplied={books.replaceAll} />}
+        </TabsContent>
+        <TabsContent value="preview" className="gap-4">
+          {tab === 'preview' && <PreviewTab subject={subject} />}
+        </TabsContent>
+        <TabsContent value="settings" className="gap-4">
+          <SettingsTab
+            subject={subject}
+            onSaved={(updated) => {
+              setSubject(updated);
+              replaceSubject(updated);
+            }}
+          />
         </TabsContent>
       </Tabs>
-
-      <ImportBookDialog open={importOpen} onOpenChange={setImportOpen} subject={subject} />
-      <NoteEditorDialog
-        open={noteDialog.open}
-        onOpenChange={(open) => !open && setNoteDialog({ open: false })}
-        subjectId={subjectId}
-        note={noteDialog.open ? noteDialog.note : null}
-      />
     </Page>
   );
 }

@@ -1,0 +1,8 @@
+**/node_modules
+**/.expo
+**/dist
+backend
+desktop
+docs
+.git
+frontend/.env*.local

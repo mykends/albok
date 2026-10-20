@@ -1,0 +1,95 @@
+# Albok on a school server. See docs/deployment.md.
+#   cp .env.example .env   # then fill it in
+#   docker compose pull && docker compose up -d
+name: albok
+
+
+services:
+  web:
+    image: ${ALBOK_REGISTRY:-ghcr.io/albok}/albok-web:${ALBOK_VERSION:-latest}
+    build:
+      context: ..
+      dockerfile: deploy/web.Dockerfile
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      ALBOK_SITE: ${ALBOK_DOMAIN:?Set ALBOK_DOMAIN in .env}
+    volumes:
+      - ./caddy/extra:/etc/caddy/extra:ro
+      - ./certs:/certs:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - api
+
+  api:
+    image: ${ALBOK_REGISTRY:-ghcr.io/albok}/albok-api:${ALBOK_VERSION:-latest}
+    build:
+      context: ../backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      ALBOK_DATABASE_URL: postgresql+psycopg://albok:${POSTGRES_PASSWORD}@db/albok
+      ALBOK_DATA_DIR: /data
+      ALBOK_PUBLIC_URL: https://${ALBOK_DOMAIN}
+      ALBOK_WEB_URL: https://${ALBOK_DOMAIN}
+      ALBOK_CORS_ORIGINS: https://${ALBOK_DOMAIN}
+      ALBOK_CONVERTER_URL: http://convert:3000
+    volumes:
+      - files:/data
+    depends_on:
+      db:
+        condition: service_healthy
+      convert:
+        condition: service_started
+
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: albok
+      POSTGRES_USER: albok
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U albok -d albok"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # LibreOffice headless behind an HTTP API: DOCX/PPTX/ODT/ODP -> PDF. Not reachable from outside.
+  convert:
+    image: gotenberg/gotenberg:8
+    restart: unless-stopped
+    command: ["gotenberg", "--api-timeout=600s", "--libreoffice-auto-start=true"]
+
+  # Nightly pg_dump + the files volume, kept ${BACKUP_KEEP_DAYS:-14} days in ./backups.
+  backup:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/backup/backup.sh"]
+    environment:
+      PGHOST: db
+      PGDATABASE: albok
+      PGUSER: albok
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      BACKUP_HOUR: ${BACKUP_HOUR:-2}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+      TZ: ${ALBOK_TIMEZONE:-Europe/Zagreb}
+    volumes:
+      - ./backup:/backup:ro
+      - ${BACKUP_DIR:-./backups}:/backups
+      - files:/data:ro
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  db:
+  files:
+  caddy-data:
+  caddy-config:

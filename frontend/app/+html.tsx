@@ -7,7 +7,7 @@ import { type PropsWithChildren } from 'react';
 // do not have access to the DOM or browser APIs.
 export default function Root({ children }: PropsWithChildren) {
   return (
-    <html lang="en" className="bg-background">
+    <html lang="hr" className="bg-background">
       <head>
         <meta charSet="utf-8" />
         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
@@ -19,7 +19,8 @@ export default function Root({ children }: PropsWithChildren) {
         */}
         <ScrollViewStyleReset />
 
-        {/* Add any additional <head> elements that you want globally available on web... */}
+        {/* pdf.js for the reader, served from the same origin (see scripts/copy-pdfjs.mjs). */}
+        <script type="module" src="/pdfjs/loader.mjs" data-albok-pdfjs="" />
       </head>
       <body>{children}</body>
     </html>

@@ -1,203 +1,202 @@
-"""Turn uploaded book files into ordered, readable sections.
+"""Suggest sections (page ranges) for a book's PDF. Professors adjust the suggestions afterwards.
 
 Strategy, from most to least structured:
-  1. PDF bookmarks (outline) or DOCX heading styles
-  2. Markdown headings / "Chapter 3", "Lesson 2", "1.2 Title" style headings in the text
-  3. Fallback: one section per PDF page, or ~600-word chunks for plain text
-Section content is kept as lightweight Markdown (headings, bullets) for the reader.
+  1. PDF bookmarks (outline). Word/LibreOffice headings and Markdown headings arrive here too, because
+     conversion to PDF turns them into bookmarks.
+  2. Headings in the page text: Markdown `#`, "Chapter 3"/"Poglavlje 3" lines, "2.1 Title" lines, and
+     known Word heading texts.
+  3. Fallback: the whole file as one section, or 10-page parts for long files.
+A slide deck is always one section.
 """
 
 import re
-from dataclasses import dataclass
-from io import BytesIO
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
-SUPPORTED_EXTENSIONS = (".pdf", ".docx", ".txt", ".md", ".markdown")
-CHUNK_WORDS = 600
 MAX_HEADING_LENGTH = 80
+CHUNK_PAGES = 10
+SINGLE_SECTION_MAX_PAGES = 20
+# A heading among the first lines of a page starts the section on that page; one further down
+# means the page is shared with the previous section.
+TOP_OF_PAGE_LINES = 3
 
 MD_HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$")
 KEYWORD_HEADING = re.compile(
-    r"^(?:chapter|unit|lesson|section|part|topic|module)\s+(?:\d+|[ivxlc]+)\b", re.IGNORECASE
+    r"^(?:chapter|unit|lesson|section|part|topic|module|poglavlje|cjelina|lekcija|tema|dio|nastavna cjelina)"
+    r"\s+(?:\d+|[ivxlc]+)\b",
+    re.IGNORECASE,
 )
-NUMBERED_HEADING = re.compile(r"^\d+(?:\.\d+)*\.?\s+(\S)")
+NUMBERED_HEADING = re.compile(r"^(\d+(?:\.\d+)*)\.?\s+(\S)")
 
 
 class BookImportError(ValueError):
-    """The file can't be turned into sections; the message is safe to show to the user."""
+    """The file can't be used; the message is safe to show to the user."""
 
 
 @dataclass
-class ParsedSection:
+class SuggestedSection:
     title: str
-    content: str
+    page_start: int  # 1-based, inclusive
+    page_end: int
+    text: str = ""
 
-    @property
-    def word_count(self) -> int:
-        return len(self.content.split())
+    def as_dict(self) -> dict:
+        return asdict(self)
 
 
 @dataclass
-class ParsedBook:
+class _Start:
     title: str
-    sections: list[ParsedSection]
+    page: int  # 0-based
+    at_top: bool
+    level: int = 1
 
 
-def parse_book(filename: str, data: bytes) -> ParsedBook:
-    ext = Path(filename).suffix.lower()
-    fallback_title = re.sub(r"[_-]+", " ", Path(filename).stem).strip() or "Untitled book"
+def suggest_sections(
+    pages: list[str],
+    outline: list[tuple[str, int]],
+    *,
+    fallback_title: str,
+    slides: bool = False,
+    known_headings: list[str] | None = None,
+) -> list[SuggestedSection]:
+    """`pages` is the text of each page, `outline` the top-level bookmarks as (title, 0-based page)."""
+    page_count = len(pages)
+    if page_count == 0:
+        return []
+    if slides:
+        return [_section(fallback_title, 0, page_count - 1, pages)]
 
-    if ext == ".pdf":
-        book = _parse_pdf(data, fallback_title)
-    elif ext == ".docx":
-        book = _parse_docx(data, fallback_title)
-    elif ext in (".txt", ".md", ".markdown"):
-        book = parse_text(_decode(data), fallback_title)
-    else:
-        raise BookImportError(f"Unsupported file type '{ext or filename}'. Use PDF, DOCX, TXT or Markdown.")
+    starts: list[_Start] = []
+    if len(outline) >= 2:
+        starts = [_Start(title, page, at_top=True) for title, page in outline]
+    if len(starts) < 2 and known_headings:
+        starts = _find_known_headings(pages, known_headings)
+    if len(starts) < 2:
+        starts = _find_text_headings(pages)
+    if len(starts) >= 2:
+        return _ranges(starts, pages)
 
-    if not book.sections:
-        raise BookImportError("No readable text was found in this file.")
-    return book
-
-
-def parse_text(text: str, fallback_title: str) -> ParsedBook:
-    lines = _normalize(text).split("\n")
-    split = _split_markdown(lines) or _split_plain(lines)
-    if split:
-        title, sections = split
-        return ParsedBook(title or fallback_title, sections)
-    return ParsedBook(fallback_title, _chunk(lines, fallback_title))
-
-
-# --- Heading-based splitting -------------------------------------------------
-
-
-def _split_markdown(lines: list[str]) -> tuple[str | None, list[ParsedSection]] | None:
-    headings: list[tuple[int, int, str]] = []  # (line index, level, text)
-    in_code = False
-    for i, line in enumerate(lines):
-        if line.lstrip().startswith("```"):
-            in_code = not in_code
-        elif not in_code and (match := MD_HEADING.match(line)):
-            headings.append((i, len(match.group(1)), match.group(2).strip()))
-    if not headings:
-        return None
-
-    # A lone top-level heading at the very start is the book title, not a section.
-    title = None
-    first_text_line = next((i for i, line in enumerate(lines) if line.strip()), None)
-    level_one = [h for h in headings if h[1] == 1]
-    if len(level_one) == 1 and headings[0][0] == first_text_line and headings[0][1] == 1:
-        title = headings[0][2]
-        lines = lines[:]
-        lines[headings[0][0]] = ""
-        headings = headings[1:]
-    if not headings:
-        return None
-
-    # Split on the shallowest level that repeats; deeper headings stay inside the section.
-    levels = [level for _, level, _ in headings]
-    repeated = [level for level in sorted(set(levels)) if levels.count(level) >= 2]
-    split_level = repeated[0] if repeated else min(levels)
-    boundaries = [(i, text) for i, level, text in headings if level <= split_level]
-    return title, _sections_from_boundaries(lines, boundaries)
-
-
-def _split_plain(lines: list[str]) -> tuple[None, list[ParsedSection]] | None:
-    boundaries = [
-        (i, line.strip())
-        for i, line in enumerate(lines)
-        if _is_plain_heading(line, previous=lines[i - 1] if i else "")
+    if page_count <= SINGLE_SECTION_MAX_PAGES:
+        return [_section(fallback_title, 0, page_count - 1, pages)]
+    return [
+        _section(f"Stranice {start + 1}–{min(start + CHUNK_PAGES, page_count)}", start, min(start + CHUNK_PAGES, page_count) - 1, pages)
+        for start in range(0, page_count, CHUNK_PAGES)
     ]
-    if len(boundaries) < 2:
-        return None
-    sections = _sections_from_boundaries(lines, boundaries)
-    return (None, sections) if len(sections) >= 2 else None
 
 
-def _is_plain_heading(line: str, previous: str) -> bool:
-    text = line.strip()
-    if not text or len(text) > MAX_HEADING_LENGTH or "...." in text or text[-1] in ".,;!?":
-        return False
-    if KEYWORD_HEADING.match(text):
-        return True
-    # "2.1 Linear equations" -- only after a blank line, to avoid catching numbered lists.
-    numbered = NUMBERED_HEADING.match(text)
-    return bool(numbered and numbered.group(1).isupper() and not previous.strip())
+def _section(title: str, first: int, last: int, pages: list[str]) -> SuggestedSection:
+    text = "\n\n".join(pages[first : last + 1]).strip()
+    return SuggestedSection(title.strip()[:200] or "Bez naslova", first + 1, last + 1, text)
 
 
-def _sections_from_boundaries(lines: list[str], boundaries: list[tuple[int, str]]) -> list[ParsedSection]:
-    sections: list[ParsedSection] = []
-    preamble = "\n".join(lines[: boundaries[0][0]]).strip()
-    if preamble:
-        sections.append(ParsedSection("Introduction", preamble))
-    for n, (start, heading) in enumerate(boundaries):
-        end = boundaries[n + 1][0] if n + 1 < len(boundaries) else len(lines)
-        content = "\n".join(lines[start + 1 : end]).strip()
-        if content:
-            sections.append(ParsedSection(heading, content))
+def _ranges(starts: list[_Start], pages: list[str]) -> list[SuggestedSection]:
+    starts = sorted(starts, key=lambda s: (s.page, not s.at_top))
+    sections: list[SuggestedSection] = []
+    first = starts[0]
+    front_end = first.page - 1 if first.at_top else first.page
+    if front_end >= 0 and "".join(pages[: front_end + 1]).strip():
+        sections.append(_section("Uvod", 0, front_end, pages))
+    for n, start in enumerate(starts):
+        if n + 1 < len(starts):
+            following = starts[n + 1]
+            end = following.page - 1 if following.at_top else following.page
+        else:
+            end = len(pages) - 1
+        sections.append(_section(start.title, start.page, max(end, start.page), pages))
     return sections
 
 
-def _chunk(lines: list[str], title: str) -> list[ParsedSection]:
-    paragraphs = [p.strip() for p in "\n".join(lines).split("\n\n") if p.strip()]
-    chunks: list[list[str]] = []
-    words = 0
-    for paragraph in paragraphs:
-        if not chunks or words >= CHUNK_WORDS:
-            chunks.append([])
-            words = 0
-        chunks[-1].append(paragraph)
-        words += len(paragraph.split())
-    if len(chunks) == 1:
-        return [ParsedSection(title, "\n\n".join(chunks[0]))]
-    return [ParsedSection(f"Part {n}", "\n\n".join(chunk)) for n, chunk in enumerate(chunks, start=1)]
+def _lines(page: str) -> list[str]:
+    return [line.strip() for line in page.split("\n") if line.strip()]
 
 
-# --- File formats --------------------------------------------------------------
+def _find_known_headings(pages: list[str], headings: list[str]) -> list[_Start]:
+    """Locate Word heading texts in the converted PDF, in order."""
+    starts: list[_Start] = []
+    page_index = 0
+    for heading in headings:
+        wanted = _squash(heading)
+        for p in range(page_index, len(pages)):
+            lines = [_squash(line) for line in _lines(pages[p])]
+            if wanted in lines:
+                starts.append(_Start(heading, p, at_top=lines.index(wanted) < TOP_OF_PAGE_LINES))
+                page_index = p
+                break
+    return starts
 
 
-def _parse_pdf(data: bytes, fallback_title: str) -> ParsedBook:
+def _find_text_headings(pages: list[str]) -> list[_Start]:
+    found: list[_Start] = []
+    in_code = False
+    for p, page in enumerate(pages):
+        previous = ""
+        for i, line in enumerate(_lines(page)):
+            if line.startswith("```"):
+                in_code = not in_code
+            elif not in_code and (level := _heading_level(line, previous)):
+                found.append(_Start(MD_HEADING.sub(r"\2", line), p, at_top=i < TOP_OF_PAGE_LINES, level=level))
+            previous = line
+    if not found:
+        return []
+    # Split on the shallowest level that repeats; deeper headings stay inside the section.
+    levels = [start.level for start in found]
+    repeated = [level for level in sorted(set(levels)) if levels.count(level) >= 2]
+    split_level = repeated[0] if repeated else min(levels)
+    return [start for start in found if start.level <= split_level]
+
+
+def _heading_level(line: str, previous: str) -> int:
+    if match := MD_HEADING.match(line):
+        return len(match.group(1))
+    if len(line) > MAX_HEADING_LENGTH or "...." in line or line[-1] in ".,;!?:":
+        return 0
+    if KEYWORD_HEADING.match(line):
+        return 1
+    # "2.1 Linear equations": capitalised, short, and not part of a numbered list.
+    numbered = NUMBERED_HEADING.match(line)
+    if numbered and numbered.group(2).isupper() and not NUMBERED_HEADING.match(previous):
+        return numbered.group(1).count(".") + 1
+    return 0
+
+
+def _squash(text: str) -> str:
+    return re.sub(r"\s+", " ", text).strip().lower()
+
+
+# --- Reading files ---------------------------------------------------------------------------
+
+
+def read_pdf(path: Path) -> tuple[list[str], list[tuple[str, int]], str]:
+    """(page texts, top-level outline, metadata title). Raises BookImportError for unusable PDFs."""
     from pypdf import PdfReader
 
     try:
-        reader = PdfReader(BytesIO(data))
+        reader = PdfReader(str(path))
         if reader.is_encrypted and not reader.decrypt(""):
-            raise BookImportError("This PDF is password protected.")
-        pages = [_normalize(page.extract_text() or "") for page in reader.pages]
-        meta_title = (reader.metadata.title or "").strip() if reader.metadata else ""
+            raise BookImportError("PDF je zaštićen lozinkom.")
+        pages = [_normalize(_safe_text(page)) for page in reader.pages]
+        title = (reader.metadata.title or "").strip() if reader.metadata else ""
         outline = _pdf_outline(reader)
     except BookImportError:
         raise
     except Exception as exc:  # pypdf raises many exception types on malformed input
-        raise BookImportError("This PDF could not be read. It may be damaged.") from exc
+        raise BookImportError("PDF se ne može pročitati. Datoteka je možda oštećena.") from exc
+    if not pages:
+        raise BookImportError("PDF nema stranica.")
+    return pages, outline, title
 
-    if not any(pages):
-        raise BookImportError("This PDF has no selectable text (it may be a scan). Run OCR on it first.")
-    title = meta_title or fallback_title
 
-    if len(outline) >= 2:
-        sections: list[ParsedSection] = []
-        front = "\n\n".join(pages[: outline[0][1]]).strip()
-        if front:
-            sections.append(ParsedSection("Front matter", front))
-        for n, (heading, start) in enumerate(outline):
-            end = outline[n + 1][1] if n + 1 < len(outline) else len(pages)
-            content = "\n\n".join(pages[start : max(end, start + 1)]).strip()
-            if content:
-                sections.append(ParsedSection(heading, content))
-        return ParsedBook(title, sections)
-
-    lines = "\n\n".join(pages).split("\n")
-    split = _split_markdown(lines) or _split_plain(lines)
-    if split:
-        return ParsedBook(split[0] or title, split[1])
-    return ParsedBook(title, [ParsedSection(f"Page {n}", text) for n, text in enumerate(pages, start=1) if text])
+def _safe_text(page) -> str:
+    # Scanned pages have no text layer; they still work, just without heading detection.
+    try:
+        return page.extract_text() or ""
+    except Exception:
+        return ""
 
 
 def _pdf_outline(reader) -> list[tuple[str, int]]:
-    """Top-level bookmarks as (title, start page), descending one level if the top is a single entry."""
+    """Top-level bookmarks as (title, 0-based page), descending one level if the top is a single entry."""
     try:
         items = reader.outline
         entries = [item for item in items if not isinstance(item, list)]
@@ -208,45 +207,50 @@ def _pdf_outline(reader) -> list[tuple[str, int]]:
         for item in entries:
             page = reader.get_destination_page_number(item)
             if page is not None:
-                starts.append((str(item.title).strip() or f"Page {page + 1}", page))
+                starts.append((str(item.title).strip() or f"Stranica {page + 1}", page))
         return sorted(starts, key=lambda entry: entry[1])
     except Exception:
         return []
 
 
-def _parse_docx(data: bytes, fallback_title: str) -> ParsedBook:
+def docx_headings(path: Path) -> list[str]:
+    """Heading texts of a Word document, used when its PDF has no bookmarks."""
     from docx import Document
 
     try:
-        document = Document(BytesIO(data))
-    except Exception as exc:
-        raise BookImportError("This Word document could not be read.") from exc
-
-    lines: list[str] = []
+        document = Document(str(path))
+    except Exception:
+        return []
+    headings = []
     for paragraph in document.paragraphs:
-        text = paragraph.text.strip()
-        if not text:
-            continue
         style = (paragraph.style.name if paragraph.style is not None else "").lower()
-        if style == "title":
-            lines.append(f"# {text}")
-        elif style.startswith("heading"):
-            level = int(match.group()) if (match := re.search(r"\d+", style)) else 1
-            lines.append("#" * min(level + 1, 6) + f" {text}")
-        elif "list" in style:
-            lines.append(f"- {text}")
-        else:
-            lines.append(text)
-        lines.append("")
-
-    core_title = (document.core_properties.title or "").strip()
-    return parse_text("\n".join(lines), core_title or fallback_title)
+        if style in ("heading 1", "heading1", "naslov 1") and paragraph.text.strip():
+            headings.append(paragraph.text.strip())
+    return headings
 
 
-# --- Text helpers ----------------------------------------------------------------
+def docx_title(path: Path) -> str:
+    """The document's Title (core property or a paragraph in the Title style)."""
+    from docx import Document
+
+    try:
+        document = Document(str(path))
+    except Exception:
+        return ""
+    if (document.core_properties.title or "").strip():
+        return document.core_properties.title.strip()
+    for paragraph in document.paragraphs:
+        style = (paragraph.style.name if paragraph.style is not None else "").lower()
+        if style in ("title", "naslov") and paragraph.text.strip():
+            return paragraph.text.strip()
+    return ""
 
 
-def _decode(data: bytes) -> str:
+def fallback_title(filename: str) -> str:
+    return re.sub(r"[_-]+", " ", Path(filename).stem).strip() or "Bez naslova"
+
+
+def decode_text(data: bytes) -> str:
     for encoding in ("utf-8-sig", "cp1250"):
         try:
             return data.decode(encoding)

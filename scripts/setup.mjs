@@ -45,5 +45,5 @@ for (const dir of ['frontend', 'desktop']) {
 }
 
 console.log('\n✔ Setup complete.');
-console.log('  npm run dev           → backend + app in your browser');
-console.log('  npm run desktop:dev   → backend + app in a desktop window');
+console.log('  npm run dev           → API (mock AAI@EduHr login, demo data) + app in your browser');
+console.log('  npm run desktop:dev   → the same, inside the kiosk shell (windowed)');

@@ -1,6 +1,13 @@
 fastapi==0.142.2
 uvicorn[standard]==0.54.0
 sqlmodel==0.0.47
+psycopg[binary]==3.3.6
 pypdf==6.19.0
 python-docx==1.2.0
 python-multipart==0.0.32
+httpx==0.28.1
+PyJWT[crypto]==2.15.1
+itsdangerous==2.2.0
+fpdf2==2.8.9
+Markdown==3.11.2
+tzdata==2026.5
