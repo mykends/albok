@@ -11,7 +11,7 @@ export default function NotFoundScreen() {
       <EmptyState icon={CircleAlert} title="Page not found" description="This page doesn't exist.">
         <Link href="/" asChild>
           <Button>
-            <Text>Back to dashboard</Text>
+            <Text>Back to dash</Text>
           </Button>
         </Link>
       </EmptyState>
