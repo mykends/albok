@@ -1,17 +1,21 @@
-"""Web tools: professors keep a list on each Subject and open tools live for the lesson they teach.
-See docs/adr/0001-web-tools-in-the-kiosk.md."""
+"""Web tools: professors keep a list on each Subject and open tools live for the lesson they teach;
+students in that lesson get them. See docs/adr/0001-web-tools-in-the-kiosk.md."""
+
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlmodel import Session, delete, select
 
-from ..access import EffectiveLesson, get_or_create_lesson, teaching_now
-from ..auth import require_professor
+from ..access import AccessScope, EffectiveLesson, get_or_create_lesson, open_web_tools, teaching_now
+from ..auth import require_professor, student_scope
 from ..clock import Clock, get_clock
 from ..db import get_session
 from ..models import Lesson, LessonWebTool, SchoolClass, Subject, User, WebTool
 from ..permissions import owned_subject
 from ..schemas import (
     LessonToolState,
+    StudentWebTool,
+    StudentWebTools,
     TeachingLesson,
     WebToolOpenState,
     WebToolRead,
@@ -182,3 +186,28 @@ def add_and_open(
     session.add(LessonWebTool(lesson_id=lesson.id, web_tool_id=tool.id))
     session.commit()
     return _teaching_lesson(session, user, lesson, effective)
+
+
+# --- Students ------------------------------------------------------------------------------------
+
+
+@router.get("/student/web-tools", response_model=StudentWebTools, tags=["student"])
+def student_tools(
+    scope: AccessScope = Depends(student_scope),
+    session: Session = Depends(get_session),
+    clock: Clock = Depends(get_clock),
+):
+    """Polled every few seconds during a lesson (as a passive request), so it stays a small query."""
+    now = clock.now()
+    lesson_id = ends_at = None
+    if scope.lesson:
+        lesson_id = session.exec(
+            select(Lesson.id).where(Lesson.slot_id == scope.lesson.slot_id, Lesson.date == scope.lesson.date)
+        ).first()
+        ends_at = datetime.combine(scope.lesson.date, scope.lesson.ends_at, tzinfo=now.tzinfo)
+    return StudentWebTools(
+        lesson_id=lesson_id,
+        lesson_ends_at=ends_at,
+        server_time=now,
+        tools=[StudentWebTool(id=tool.id, name=tool.name, url=tool.url) for tool in open_web_tools(session, scope)],
+    )

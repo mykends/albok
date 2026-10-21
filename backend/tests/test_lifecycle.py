@@ -3,7 +3,9 @@ from datetime import datetime
 from sqlmodel import select
 
 from albok_api.jobs import run_daily
-from albok_api.models import Book, Enrollment, Lesson, Note, Preset, Publication, SchoolClass, SchoolYear, Section, Subject, User
+from albok_api.models import (
+    Book, Enrollment, Lesson, LessonWebTool, Note, Preset, Publication, SchoolClass, SchoolYear, Section, Subject, User, WebTool,
+)  # fmt: skip
 
 from .conftest import publish, upload_text
 from .test_exports import outbox
@@ -13,9 +15,11 @@ def test_year_end_deletes_student_data_and_keeps_professor_content(app, db, scho
     book = upload_text(horvat, school.history.id)
     publish(horvat, book["sections"][1]["id"], school.b3.id)
     horvat.post(f"/api/subjects/{school.history.id}/presets", json={"year_level": 3, "section_ids": [book["sections"][1]["id"]]})
+    tool = horvat.post(f"/api/subjects/{school.history.id}/web-tools", json={"name": "Quizlet", "url": "https://quizlet.com/"}).json()
     clock.set(datetime(2026, 10, 20, 8, 10))
     lesson = luka.get("/api/student/now").json()["lesson"]
     luka.put(f"/api/lessons/{lesson['id']}/note", json={"content": "x"})
+    assert horvat.put(f"/api/lessons/{lesson['id']}/web-tools/{tool['id']}", json={"open": True}).status_code == 200
 
     clock.set(datetime(2027, 8, 1, 6, 0))  # 30 days before 31 August
     run_daily(app.state.engine, clock)
@@ -32,7 +36,7 @@ def test_year_end_deletes_student_data_and_keeps_professor_content(app, db, scho
     clock.set(datetime(2027, 8, 31, 6, 0))
     run_daily(app.state.engine, clock)
     db.expire_all()
-    for model in (Note, Lesson, Publication, Enrollment, SchoolClass):
+    for model in (Note, Lesson, LessonWebTool, Publication, Enrollment, SchoolClass):
         assert db.exec(select(model)).first() is None, model
     assert {u.username for u in db.exec(select(User)).all()} == {
         "ana.admin@skole.hr",
@@ -44,6 +48,7 @@ def test_year_end_deletes_student_data_and_keeps_professor_content(app, db, scho
     assert db.exec(select(Book)).first() is not None
     assert db.exec(select(Section)).first() is not None
     assert db.exec(select(Preset)).first() is not None
+    assert db.exec(select(WebTool)).first() is not None
     # The professor's content is intact and usable next year.
     horvat = login("ivana.horvat@skole.hr")
     assert len(horvat.get(f"/api/subjects/{school.history.id}/books").json()[0]["sections"]) == 4

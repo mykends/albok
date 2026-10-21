@@ -303,3 +303,100 @@ def test_teaching_now_is_empty_outside_lessons_and_lists_overlapping_lessons(kov
 def test_students_cannot_use_professor_endpoints(luka, school, clock):
     at(clock, 8, 10)
     assert luka.get("/api/professor/now").status_code == 403
+
+
+# --- Students -----------------------------------------------------------------------------------
+
+
+def student_tools(client, passive: bool = True) -> list[str]:
+    response = client.get("/api/student/web-tools", headers={"X-Albok-Passive": "1"} if passive else {})
+    assert response.status_code == 200, response.text
+    return [tool["name"] for tool in response.json()["tools"]]
+
+
+def open_now(professor, tool: dict) -> int:
+    lesson_id = teaching(professor)[-1]["lesson_id"]
+    assert set_open(professor, lesson_id, tool["id"]).status_code == 200
+    return lesson_id
+
+
+def test_students_in_the_lesson_get_its_open_tools(horvat, luka, login, school, clock):
+    """AE1: 3.B sees the tool; 1.A, in a different lesson at the same moment, sees nothing."""
+    petra = login("petra.novak@skole.hr")
+    tool = add_tool(horvat, school.history.id)
+    add_tool(horvat, school.history.id, DICTIONARY)
+    at(clock, 8, 10)
+    lesson_id = open_now(horvat, tool)
+    response = luka.get("/api/student/web-tools").json()
+    assert response["lesson_id"] == lesson_id
+    assert response["tools"] == [{"id": tool["id"], "name": "Quizlet", "url": "https://quizlet.com/"}]
+    assert response["lesson_ends_at"].startswith("2026-10-20T08:45:00")
+    assert response["server_time"].startswith("2026-10-20T08:10:00")
+    assert student_tools(petra) == []
+
+
+def test_tools_opened_in_the_lead_before_the_bell_are_visible(horvat, luka, school, clock):
+    tool = add_tool(horvat, school.history.id)
+    at(clock, 7, 56)
+    open_now(horvat, tool)
+    assert student_tools(luka) == ["Quizlet"]
+
+
+def test_tools_never_carry_over_to_a_back_to_back_lesson(horvat, luka, db, school, clock):
+    """AE2: same class, Subject and professor at 07:10 and 08:00."""
+    first = slot_at(db, "08:00", school.b3.id)
+    db.add(TimetableSlot(assignment_id=first.assignment_id, weekday=2, starts_at=time(7, 10), ends_at=time(7, 55)))
+    db.commit()
+    tool = add_tool(horvat, school.history.id)
+    at(clock, 7, 20)
+    open_now(horvat, tool)
+    assert student_tools(luka) == ["Quizlet"]
+    at(clock, 7, 55)  # the 08:00 lesson's window opens and takes over
+    assert student_tools(luka) == []
+    at(clock, 8, 10)
+    assert student_tools(luka) == []
+
+
+def test_free_time_has_no_tools_even_if_never_closed(horvat, luka, school, clock):
+    """AE6."""
+    tool = add_tool(horvat, school.history.id)
+    at(clock, 8, 10)
+    open_now(horvat, tool)
+    at(clock, 9, 50)
+    response = luka.get("/api/student/web-tools").json()
+    assert response == {**response, "lesson_id": None, "lesson_ends_at": None, "tools": []}
+
+
+def test_closing_or_deleting_a_tool_removes_it_on_the_next_call(horvat, luka, school, clock):
+    """AE3."""
+    quizlet = add_tool(horvat, school.history.id)
+    dictionary = add_tool(horvat, school.history.id, DICTIONARY)
+    at(clock, 8, 10)
+    lesson_id = open_now(horvat, quizlet)
+    open_now(horvat, dictionary)
+    assert student_tools(luka) == ["Quizlet", "Cambridge Dictionary"]
+    set_open(horvat, lesson_id, quizlet["id"], open=False)
+    assert student_tools(luka) == ["Cambridge Dictionary"]
+    horvat.delete(f"/api/web-tools/{dictionary['id']}")
+    assert student_tools(luka) == []
+
+
+def test_a_subject_switched_by_an_override_hides_the_old_subjects_tools(horvat, luka, db, school, clock):
+    tool = add_tool(horvat, school.history.id)
+    at(clock, 8, 10)
+    open_now(horvat, tool)
+    db.add(LessonOverride(slot_id=slot_at(db, "08:00", school.b3.id).id, date=TUESDAY, substitute_subject_id=school.math.id))
+    db.commit()
+    assert student_tools(luka) == []
+
+
+def test_professors_cannot_use_the_student_endpoint(horvat, school, clock):
+    at(clock, 8, 10)
+    assert horvat.get("/api/student/web-tools").status_code == 403
+
+
+def test_polling_for_tools_does_not_keep_the_session_alive(short_idle, luka, clock):
+    clock.set(datetime(2026, 10, 20, 9, 8))
+    student_tools(luka)
+    clock.set(datetime(2026, 10, 20, 9, 11, 30))
+    assert luka.get("/api/me").status_code == 401

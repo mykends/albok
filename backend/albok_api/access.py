@@ -17,6 +17,7 @@ from .models import (
     Enrollment,
     Lesson,
     LessonOverride,
+    LessonWebTool,
     Publication,
     SchoolClass,
     SchoolYear,
@@ -25,6 +26,7 @@ from .models import (
     TeachingAssignment,
     TimetableSlot,
     User,
+    WebTool,
 )
 
 # Content for a lesson opens this long before the bell.
@@ -266,6 +268,26 @@ def visible_sections(session: Session, scope: AccessScope) -> list[tuple[Section
     if scope.content_subject_id is not None:
         query = query.where(Book.subject_id == scope.content_subject_id)
     return list(session.exec(query).all())
+
+
+def open_web_tools(session: Session, scope: AccessScope) -> list[WebTool]:
+    """The web tools opened for the student's current lesson. Looked up by that lesson's slot and date,
+    so free time and the next lesson (even back-to-back, same subject) get none."""
+    if scope.lesson is None:
+        return []
+    return list(
+        session.exec(
+            select(WebTool)
+            .join(LessonWebTool, LessonWebTool.web_tool_id == WebTool.id)
+            .join(Lesson, Lesson.id == LessonWebTool.lesson_id)
+            .where(
+                Lesson.slot_id == scope.lesson.slot_id,
+                Lesson.date == scope.lesson.date,
+                WebTool.subject_id == scope.lesson.subject_id,
+            )
+            .order_by(WebTool.position, WebTool.id)
+        ).all()
+    )
 
 
 def student_can_open_section(session: Session, scope: AccessScope, section_id: int) -> bool:

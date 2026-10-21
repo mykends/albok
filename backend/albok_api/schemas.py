@@ -108,6 +108,20 @@ class NowRead(BaseModel):
     subjects: list[StudentSubject]
 
 
+class StudentWebTool(BaseModel):
+    id: int
+    name: str
+    url: str
+
+
+class StudentWebTools(BaseModel):
+    lesson_id: int | None
+    # With server_time, lets the kiosk close the tools at the bell by its own clock.
+    lesson_ends_at: datetime | None
+    server_time: datetime
+    tools: list[StudentWebTool]
+
+
 class ReaderSection(BaseModel):
     id: int
     title: str
