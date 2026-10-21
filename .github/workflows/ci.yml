@@ -39,6 +39,13 @@ jobs:
         working-directory: frontend
       - run: npm run typecheck
         working-directory: frontend
+      - run: npm ci
+        working-directory: desktop
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+      - name: Desktop tests
+        run: npm test
+        working-directory: desktop
 
   images:
     # Versioned images for schools: `ALBOK_VERSION=<tag>` in deploy/.env, then `docker compose pull && docker compose up -d`.

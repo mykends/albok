@@ -7,6 +7,7 @@
   "private": true,
   "scripts": {
     "start": "electron .",
+    "test": "node --test web-tools.test.js",
     "dev": "cross-env ALBOK_URL=http://localhost:8081 ALBOK_KIOSK=false ALBOK_AUTH_ORIGINS=http://localhost:8765 electron .",
     "dist:win": "electron-builder --win --x64"
   },
@@ -19,6 +20,7 @@
     "files": [
       "main.js",
       "preload.js",
+      "web-tools.js",
       "package.json"
     ],
     "win": {
