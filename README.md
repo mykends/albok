@@ -19,7 +19,7 @@ School PCs: Electron kiosk shell ──┐      Professors: browser or the same 
 | --- | --- |
 | `backend/` | Python, FastAPI, SQLModel. PostgreSQL in production, SQLite for development and tests. pypdf, fpdf2 and LibreOffice (through Gotenberg) for PDFs. |
 | `frontend/` | Expo (React Native + expo-router) exported as a web app, NativeWind, [React Native Reusables](https://reactnativereusables.com), zustand, i18next (Croatian only for now), pdf.js. |
-| `desktop/` | Electron kiosk shell that only shows the server's web UI. |
+| `desktop/` | Electron kiosk shell that shows the server's web UI and, during a lesson, the web tools its professor opened. |
 | `deploy/` | Docker Compose stack, Caddyfile, backup and restore scripts. |
 
 ```
@@ -30,14 +30,19 @@ backend/albok_api/
   documents.py     uploads → PDF, section suggestions, per-section page extraction
   importers.py     page-range suggestions from bookmarks and headings
   school_csv.py    roster and timetable CSV import (dry run first)
+  web_tools.py     which links professors may add as web tools
   exports.py       notebook + material PDF emailed to the student
   jobs.py          30/7-day reminder emails and the year-end deletion
-  routers/         auth, student, reader, exports, content (professor), admin
+  routers/         auth, student, reader, exports, content (professor), web_tools, admin
 frontend/
-  app/             screens: login, index (role home), read/[sectionId], notes, subjects/[id], books/[id], admin
-  components/      professor/, admin/, pdf-viewer, lesson-note-editor, session-watch, ui/ (shadcn-style primitives)
+  app/             screens: login, index (role home), read/[sectionId], lesson, notes, subjects/[id], books/[id], admin
+  components/      professor/, admin/, web-tools/, pdf-viewer, lesson-note-editor, session-watch, ui/ (shadcn-style primitives)
   lib/note-sync.ts offline-first lesson notes
+  lib/kiosk.ts     the kiosk shell's bridge, and how web tools show (tabs, links or nothing)
   locales/hr.json  every UI string
+desktop/
+  main.js          the kiosk window, its lockdown, and the hardened web tool webviews
+  web-tools.js     same-site rule, link rules and the open-tools list (unit-tested with node:test)
 ```
 
 ## Getting started
@@ -48,10 +53,10 @@ Prerequisites: **Node.js 24** (`nvm use`), **Python 3.11+**, and LibreOffice if 
 npm install         # root helpers
 npm run setup       # Python venv + backend packages, frontend and desktop npm packages
 npm run dev         # API on :8765 (mock login, demo data) + web app on http://localhost:8081
-npm test            # backend tests + frontend typecheck
+npm test            # backend tests + frontend typecheck + desktop unit tests
 ```
 
-`npm run dev` starts the API with `ALBOK_MOCK_OIDC=1`. The sign-in button leads to a page where you pick a seeded user: an admin, three professors (Ivana Horvat, Marko Kovač, Maja Jurić for Engleski jezik), three students in 3.B and 1.A, and one user who is not on the roster. The first start seeds a school year, a timetable (Mon–Fri, 08:00–13:55) and three published books.
+`npm run dev` starts the API with `ALBOK_MOCK_OIDC=1`. The sign-in button leads to a page where you pick a seeded user: an admin, three professors (Ivana Horvat, Marko Kovač, Maja Jurić for Engleski jezik), three students in 3.B and 1.A, and one user who is not on the roster. The first start seeds a school year, a timetable (Mon–Fri, 08:00–13:55), three published books and two web tools (Cambridge Dictionary and Quizlet) on Maja Jurić's Engleski jezik.
 
 Lessons only exist during school hours. To try the lesson view at any time, set a starting time for the server clock:
 
@@ -79,6 +84,7 @@ The Word conversion test is skipped when LibreOffice isn't installed.
 - **Students only ever receive the pages of a published section** (`GET /api/sections/{id}/pdf`). The whole PDF is professor-only.
 - **Restructuring never deletes notes.** Merge moves note links, split keeps them on the first part, delete removes only the link, unpublish keeps the link but makes it unavailable. Lessons copy their class, subject and times so re-importing a timetable can't delete notes either.
 - **Notes are offline-first.** Every keystroke is stored on the device and synced every few seconds; the local copy is cleared when the server confirms, and wiped at every sign-out.
+- **Web tools open only for the running lesson.** Professors open them live for the lesson they teach (`teaching_now`); students get them through `access_at` (`open_web_tools`). The kiosk shell attaches a webview only for an open tool's exact link and keeps it on that tool's site (`desktop/web-tools.js`). See [docs/adr/0001-web-tools-in-the-kiosk.md](docs/adr/0001-web-tools-in-the-kiosk.md).
 - Professors never see students' notes.
 
 ## API
@@ -88,9 +94,10 @@ Interactive docs are at `http://localhost:8765/docs` in development.
 | Area | Endpoints |
 | --- | --- |
 | Auth | `GET /auth/login`, `GET /auth/callback`, `POST /auth/logout` (returns the AAI end-session URL), `GET /api/me`, `GET /api/public` |
-| Student | `GET /api/student/now`, `GET /api/student/notes`, `GET`/`PUT /api/lessons/{id}/note`, `POST /api/lessons/current/sections/{id}/opened`, `GET /api/exports/quota`, `POST /api/exports` |
+| Student | `GET /api/student/now`, `GET /api/student/notes`, `GET`/`PUT /api/lessons/{id}/note`, `POST /api/lessons/current/sections/{id}/opened`, `GET /api/student/web-tools`, `GET /api/exports/quota`, `POST /api/exports` |
 | Reader | `GET /api/sections/{id}`, `GET /api/sections/{id}/pdf` (`?preview_class_id=` for professors) |
 | Professor | `GET /api/professor/subjects`, `GET`/`PATCH /api/subjects/{id}`, books (`/api/subjects/{id}/books`, `/books/text`, `/api/books/{id}`, `/pdf`, `/original`, `/replace`, `/replace/confirm`), sections (`POST /api/books/{id}/sections`, `PATCH`/`DELETE /api/sections/{id}`, `/split`, `/sections/merge`, `/sections/order`), publishing (`PUT /api/sections/{id}/publications/{class_id}`, `PUT /api/books/{id}/publications/{class_id}`, `PUT /api/sections/{id}/inclusions/{class_id}`), presets (`/api/subjects/{id}/presets`, `/api/presets/{id}`, `POST /api/presets/{id}/apply/{class_id}`), `GET /api/professor/preview/{class_id}` |
+| Web tools | `GET`/`POST /api/subjects/{id}/web-tools`, `PATCH`/`DELETE /api/web-tools/{id}`, `GET /api/professor/now` (lessons being taught now, with their tools), `PUT /api/lessons/{id}/web-tools/{tool_id}` (open or close), `POST /api/lessons/{id}/web-tools` (add and open) |
 | Admin | `/api/admin/years` (+ `/days`), `/classes`, `/roster/import`, `/timetable/import` (`?dry_run=true` by default), `/slots`, `/overrides`, `/subjects`, `/users`, `/storage` |
 
 ## Configuration

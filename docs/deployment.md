@@ -114,7 +114,20 @@ Only people on the roster (and the `ALBOK_ADMINS`) can sign in.
    If AAI@EduHr Lab or a future login page uses another address than `https://login.aaiedu.hr`, list it: `"authOrigins": ["https://login.aaiedu.hr", "https://..."]`.
 3. Configure **Windows Assigned Access** (kiosk mode) through Intune or Group Policy: a kiosk account that signs in automatically at startup and runs only Albok. Albok then opens on its sign-in screen.
 
-The kiosk app only shows the Albok and AAI@EduHr addresses. It blocks other navigation, new windows, downloads and printing, has no quit control, and keeps cookies in memory only. When a student signs out (or after 10 idle minutes, or at the end of the school day) it wipes the session and also signs them out of AAI@EduHr, so the next student can't be signed in as the previous one.
+The kiosk app shows the Albok and AAI@EduHr addresses and, during a lesson, the web tools the lesson's professor has opened (below). It blocks all other navigation, new windows, downloads and printing, has no quit control, and keeps cookies in memory only. When a student signs out (or after 10 idle minutes, or at the end of the school day) it wipes the session and also signs them out of AAI@EduHr, so the next student can't be signed in as the previous one.
+
+### Web tools
+
+Professors can name external sites on their subject, such as an online dictionary or a flash-card set, and open them live for the lesson they are teaching. Students in that lesson see each one as a tab next to the material. The reasons for this design are in [the decision record](adr/0001-web-tools-in-the-kiosk.md); these are the limits to check before signing off:
+
+- **Only what the professor opened, only during the lesson.** A tool appears for the students of one lesson while it runs. It closes for everyone when the lesson ends (the kiosk closes it by its own clock even if the server is unreachable), within about five seconds of the professor closing it or deleting it, and never carries over to the next lesson. A substitute can open the covered lesson's tools; nobody can open tools ahead of time.
+- **Same site only.** A tool starts at the professor's `https://` link, and the student can move anywhere on that link's host and its subdomains (a leading `www.` is ignored), nowhere else. A link to another site, a pop-up and a third-party sign-in such as "Sign in with Google" show "not allowed in this lesson" instead of opening. A Google Translate tool can't reach Google search or sign-in.
+- **Only public pages can be added.** Albok refuses links that aren't `https://`, IP addresses, school-internal names (`.local`, `.lan` and similar), link shorteners and links to files. The kiosk checks the same rules again before showing a tool.
+- **No downloads, printing, pop-up windows, camera or microphone** inside tools. Tools run in their own in-memory session, wiped at every sign-out like the Albok session.
+- **Nothing recorded.** Albok stores which tools were opened for which lesson, never what a student did in them. The school's privacy policy may need to say that students can reach professor-chosen third-party sites during lessons.
+- **The school's network filtering still applies** to everything a tool loads; Albok doesn't replace it.
+
+Web tools need the kiosk installer from this release or later. A PC with an older installer shows no web tools at all; outside the kiosk (an ordinary browser, or the app with `"kiosk": false`) students see the lesson's tools as plain links.
 
 Professors can use the same installer with `"kiosk": false` or any browser.
 
@@ -137,12 +150,12 @@ Set `ALBOK_VERSION` in `.env` to the new version, then:
 docker compose pull && docker compose up -d
 ```
 
-Student PCs only need a new installer when the kiosk app itself changes; the UI comes from the server.
+Student PCs only need a new installer when the kiosk app itself changes; the UI comes from the server. Web tools were such a change (see step 5).
 
 ## 8. During and after the school year
 
 - 30 and 7 days before the deletion date, students get an email reminding them to export their notes.
-- On the deletion date Albok deletes students' notes, per-class publishing, classes, rosters, the timetable and student accounts. Professors' subjects, books, sections and presets stay.
+- On the deletion date Albok deletes students' notes, per-class publishing, classes, rosters, the timetable, the record of which web tools were opened in which lesson, and student accounts. Professors' subjects, books, sections, presets and web tools stay.
 - Next year: add the new school year, import the new roster and timetable; professors apply their presets to the new classes.
 
 ## Troubleshooting
