@@ -317,6 +317,30 @@ class WebToolUpdate(BaseModel):
     position: int | None = Field(default=None, ge=0)
 
 
+class WebToolOpenState(BaseModel):
+    open: bool
+
+
+class LessonToolState(WebToolRead):
+    open: bool
+
+
+class TeachingLesson(BaseModel):
+    """A lesson the professor is teaching right now, with the subject's web tools."""
+
+    lesson_id: int
+    date: date
+    starts_at: time
+    ends_at: time
+    class_name: str
+    subject_id: int
+    subject_name: str
+    substitute: bool
+    # False for a substitute covering another professor's Subject: he may open its tools, not change the list.
+    can_edit_tools: bool
+    tools: list[LessonToolState]
+
+
 # --- Admin ------------------------------------------------------------------------------------
 
 

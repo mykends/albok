@@ -272,6 +272,15 @@ def student_can_open_section(session: Session, scope: AccessScope, section_id: i
     return any(section.id == section_id for section, _ in visible_sections(session, scope))
 
 
+def teaching_now(session: Session, user: User, now: datetime) -> list[EffectiveLesson]:
+    """Lessons the user teaches whose window is open now, as owner or substitute (after overrides).
+    Only these lessons can have web tools opened."""
+    year = current_school_year(session, now.date())
+    if year is None:
+        return []
+    return [lesson for lesson in lessons_on(session, year, now.date()) if lesson.professor_id == user.id and lesson.is_open(now)]
+
+
 def substitute_can_access(session: Session, user: User, subject_id: int, class_id: int | None, now: datetime) -> bool:
     """A substitute professor gets access to a subject (for one class) only during the covered slot."""
     year = current_school_year(session, now.date())
