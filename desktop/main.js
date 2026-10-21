@@ -134,8 +134,10 @@ function checkWebToolAttach(event, webPreferences, params) {
   }
   delete webPreferences.preload;
   delete webPreferences.preloadURL;
-  delete params.allowpopups;
   Object.assign(webPreferences, {
+    // Pop-ups must reach guardWebTool's window-open handler, which never opens a window; with them
+    // disabled, Chromium drops target="_blank" links and "Sign in with Google" silently.
+    disablePopups: false,
     nodeIntegration: false,
     nodeIntegrationInSubFrames: false,
     nodeIntegrationInWorker: false,
