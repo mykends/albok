@@ -1,7 +1,8 @@
 """Daily school-year jobs: export reminders 30 and 7 days before the deletion date, then the deletion.
 
 Deleted on the deletion date: student notes, per-class publish state, classes, rosters, enrollments,
-the timetable and student accounts. Kept: professors' subjects, books, sections and presets.
+the timetable, the lessons' web tools and student accounts. Kept: professors' subjects, books, sections,
+presets and web tools.
 """
 
 import asyncio
@@ -55,7 +56,7 @@ def send_warnings(session: Session, year: SchoolYear, days: int) -> int:
 
 def purge_year(session: Session, year: SchoolYear, clock: Clock) -> dict[str, int]:
     """Deleting the year's classes cascades to enrollments, assignments, slots, overrides, lessons,
-    notes, note links, inclusions and publications."""
+    notes, note links, the lessons' web tools, inclusions and publications."""
     students = year_students(session, year)
     class_ids = list(session.exec(select(SchoolClass.id).where(SchoolClass.school_year_id == year.id)).all())
     if class_ids:

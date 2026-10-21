@@ -1,6 +1,7 @@
 """Database tables. See docs/specs/professor-student-roles.md ("Data model") for the design.
 
-Rows marked "per school year" are deleted by the year-end job; subjects, books, sections and presets persist.
+Rows marked "per school year" are deleted by the year-end job; subjects, books, sections, presets and web
+tools persist. Lesson rows (and with them notes and the lesson's web tools) go with their classes.
 """
 
 from datetime import date as Date, datetime, time, timezone
@@ -242,6 +243,17 @@ class PresetSection(SQLModel, table=True):
     section_id: int = Field(foreign_key="section.id", primary_key=True, ondelete="CASCADE")
 
 
+class WebTool(SQLModel, table=True):
+    """An external site the professor names for the subject. Not per school year: it carries over like books."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    subject_id: int = Field(foreign_key="subject.id", index=True, ondelete="CASCADE")
+    name: str
+    url: str = Field(sa_column=Column(Text, nullable=False))  # checked by web_tools.normalize_link
+    position: int = 0
+    created_at: datetime = Timestamp(default_factory=utcnow)
+
+
 # --- Student work --------------------------------------------------------------------------
 
 
@@ -260,6 +272,15 @@ class NoteSection(SQLModel, table=True):
 
     note_id: int = Field(foreign_key="note.id", primary_key=True, ondelete="CASCADE")
     section_id: int = Field(foreign_key="section.id", primary_key=True, ondelete="CASCADE")
+
+
+class LessonWebTool(SQLModel, table=True):
+    """A web tool the professor opened for one lesson. Deleting the tool or the lesson closes it.
+    Albok keeps only this, never what students did in the tool."""
+
+    lesson_id: int = Field(foreign_key="lesson.id", primary_key=True, ondelete="CASCADE")
+    web_tool_id: int = Field(foreign_key="webtool.id", primary_key=True, index=True, ondelete="CASCADE")
+    opened_at: datetime = Timestamp(default_factory=utcnow)
 
 
 class ExportLog(SQLModel, table=True):

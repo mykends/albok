@@ -297,6 +297,26 @@ class PresetUpdate(BaseModel):
     section_ids: list[int]
 
 
+class WebToolRead(BaseModel):
+    id: int
+    subject_id: int
+    name: str
+    url: str
+    position: int
+
+
+class WebToolWrite(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    # Checked by web_tools.normalize_link, which gives the professor a reason.
+    url: str = Field(max_length=2000)
+
+
+class WebToolUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    url: str | None = Field(default=None, max_length=2000)
+    position: int | None = Field(default=None, ge=0)
+
+
 # --- Admin ------------------------------------------------------------------------------------
 
 
