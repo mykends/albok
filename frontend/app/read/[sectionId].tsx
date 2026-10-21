@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils';
 import { READER_ZOOM, usePreferencesStore } from '@/stores/preferences-store';
 import { useSession } from '@/stores/session-store';
 import { useStudent } from '@/stores/student-store';
-import { useWebTools } from '@/stores/web-tools-store';
+import { isToolActive, useWebTools } from '@/stores/web-tools-store';
 import { router, useLocalSearchParams } from 'expo-router';
 import Head from 'expo-router/head';
 import {
@@ -103,7 +103,7 @@ function Reader({
   const changeZoom = usePreferencesStore((state) => state.changeReaderZoom);
   const notesPanelOpen = usePreferencesStore((state) => state.notesPanelOpen);
   const toggleNotesPanel = usePreferencesStore((state) => state.toggleNotesPanel);
-  const toolOpen = useWebTools((state) => state.active !== null && state.tools.some((tool) => tool.id === state.active));
+  const toolOpen = useWebTools(isToolActive);
   const { width } = useWindowDimensions();
 
   const go = (id: number | null) => {

@@ -74,11 +74,13 @@ function createOpenTools({ onChange = () => {} } = {}) {
   let urls = [];
   let timer = null;
 
+  // Every poll sends the list; only a change is reported.
   function replace(next) {
     clearTimeout(timer);
     timer = null;
+    const changed = next.length !== urls.length || next.some((url, i) => url !== urls[i]);
     urls = next;
-    onChange([...urls]);
+    if (changed) onChange([...urls]);
   }
 
   return {

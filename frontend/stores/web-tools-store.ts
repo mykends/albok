@@ -35,6 +35,15 @@ export function currentFrame(frames: Record<string, Frame>): Frame | null {
   return Object.values(frames).at(-1) ?? null;
 }
 
+/** Whether a tool tab (not the material) is being shown. */
+export function isToolActive(state: Pick<WebToolsState, 'active' | 'tools'>): boolean {
+  return state.active !== null && state.tools.some((tool) => tool.id === state.active);
+}
+
+function sameTools(a: StudentWebTool[], b: StudentWebTool[]) {
+  return a.length === b.length && a.every((tool, i) => tool.id === b[i].id && tool.name === b[i].name && tool.url === b[i].url);
+}
+
 /** Status is kept per tool and link, so a link the professor edits starts over. */
 export const toolKey = (tool: StudentWebTool) => `${tool.id}|${tool.url}`;
 
@@ -65,7 +74,8 @@ export const useWebTools = create<WebToolsState>()((set, get) => ({
     } catch {
       // Without an answer nothing stays open; the next poll restores what the professor still has open.
       await pushToShell([], 0);
-      set({ tools: [], active: null, status: {}, notice: null });
+      const state = get();
+      if (state.tools.length || state.active !== null || state.notice) set({ tools: [], active: null, status: {}, notice: null });
       return;
     }
     const tools = response.lesson_id === null ? [] : response.tools;
@@ -81,6 +91,8 @@ export const useWebTools = create<WebToolsState>()((set, get) => ({
 
     const state = get();
     const sameLesson = response.lesson_id === state.lessonId;
+    // Most polls change nothing; keeping the state as it is spares every tab and webview a re-render.
+    if (sameLesson && sameTools(tools, state.tools)) return;
     const seen = sameLesson ? state.seen : [];
     const fresh = tools.filter((tool) => !seen.includes(tool.id));
     const keys = new Set(tools.map(toolKey));

@@ -177,6 +177,7 @@ function guardWebTool(guest, tool) {
   };
   guest.on('will-frame-navigate', guard);
   guest.on('will-redirect', guard);
+  // A second guard for the main frame; will-frame-navigate above already reports it to the page.
   guest.on('will-navigate', (event) => {
     if (!toolAllows(tool, event.url)) event.preventDefault();
   });

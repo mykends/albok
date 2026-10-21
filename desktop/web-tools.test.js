@@ -125,3 +125,17 @@ test('a newer list replaces the old one and its lesson end', (t) => {
   tools.clear();
   assert.deepEqual(tools.list(), []);
 });
+
+test('the same list again reports no change but still moves the lesson end', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 0 });
+  const changes = [];
+  const tools = createOpenTools({ onChange: (list) => changes.push(list) });
+  tools.set(['https://quizlet.com/'], 1000);
+  t.mock.timers.tick(500);
+  tools.set(['https://quizlet.com'], 1000);
+  assert.equal(changes.length, 1);
+  t.mock.timers.tick(900);
+  assert.ok(tools.allows('https://quizlet.com/'));
+  t.mock.timers.tick(100);
+  assert.deepEqual(changes, [['https://quizlet.com/'], []]);
+});

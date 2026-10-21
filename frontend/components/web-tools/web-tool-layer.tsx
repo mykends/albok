@@ -4,7 +4,7 @@ import { Text } from '@/components/ui/text';
 import type { StudentWebTool } from '@/lib/api';
 import { kioskBridge, webToolMode } from '@/lib/kiosk';
 import { cn } from '@/lib/utils';
-import { currentFrame, toolKey, useWebTools, type Frame } from '@/stores/web-tools-store';
+import { currentFrame, isToolActive, toolKey, useWebTools, type Frame } from '@/stores/web-tools-store';
 import { useFocusEffect } from 'expo-router';
 import { Ban, TriangleAlert, WifiOff } from 'lucide-react-native';
 import { createElement, useCallback, useEffect, useId, useRef, useState } from 'react';
@@ -60,6 +60,7 @@ export function WebToolPlaceholder({ className }: { className?: string }) {
 export function WebToolLayer() {
   const tools = useWebTools((state) => state.tools);
   const active = useWebTools((state) => state.active);
+  const toolActive = useWebTools(isToolActive);
   const frame = useWebTools((state) => currentFrame(state.frames));
   const lastFrame = useRef<Frame>({ x: 0, y: 0, width: 0, height: 0 });
 
@@ -76,12 +77,13 @@ export function WebToolLayer() {
         if (id !== webContentsId) continue;
         const tool = useWebTools.getState().tools.find((t) => toolKey(t) === view.dataset.toolKey);
         if (tool) useWebTools.getState().blocked(tool);
+        return;
       }
     });
   }, []);
 
   if (Platform.OS !== 'web' || webToolMode() !== 'tabs' || tools.length === 0) return null;
-  const visible = active !== null && frame !== null && tools.some((tool) => tool.id === active);
+  const visible = toolActive && frame !== null;
   // While hidden, keep the last size so tool pages don't re-lay themselves out at zero width.
   if (frame) lastFrame.current = frame;
   const { x, y, width, height } = lastFrame.current;

@@ -1,8 +1,6 @@
 """Web tools: professors keep a list on each Subject and open tools live for the lesson they teach;
 students in that lesson get them. See docs/adr/0001-web-tools-in-the-kiosk.md."""
 
-from datetime import datetime
-
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlmodel import Session, delete, select
 
@@ -122,7 +120,7 @@ def _teaching_lesson(session: Session, user: User, lesson: Lesson, effective: Ef
         substitute=effective.substitute,
         can_edit_tools=subject.professor_id == user.id,
         tools=[
-            LessonToolState(**WebToolRead.model_validate(tool, from_attributes=True).model_dump(), open=tool.id in opened)
+            LessonToolState(**tool.model_dump(), open=tool.id in opened)
             for tool in _subject_tools(session, subject.id)
         ],
     )
@@ -199,15 +197,10 @@ def student_tools(
 ):
     """Polled every few seconds during a lesson (as a passive request), so it stays a small query."""
     now = clock.now()
-    lesson_id = ends_at = None
-    if scope.lesson:
-        lesson_id = session.exec(
-            select(Lesson.id).where(Lesson.slot_id == scope.lesson.slot_id, Lesson.date == scope.lesson.date)
-        ).first()
-        ends_at = datetime.combine(scope.lesson.date, scope.lesson.ends_at, tzinfo=now.tzinfo)
+    lesson, tools = open_web_tools(session, scope)
     return StudentWebTools(
-        lesson_id=lesson_id,
-        lesson_ends_at=ends_at,
+        lesson_id=lesson.id if lesson else None,
+        lesson_ends_at=scope.lesson.window(now.tzinfo)[1] if scope.lesson else None,
         server_time=now,
-        tools=[StudentWebTool(id=tool.id, name=tool.name, url=tool.url) for tool in open_web_tools(session, scope)],
+        tools=[StudentWebTool(id=tool.id, name=tool.name, url=tool.url) for tool in tools],
     )

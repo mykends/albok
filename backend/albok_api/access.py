@@ -152,10 +152,12 @@ def open_lesson(lessons: list[EffectiveLesson], now: datetime) -> EffectiveLesso
     return candidates[-1] if candidates else None
 
 
+def find_lesson(session: Session, effective: EffectiveLesson) -> Lesson | None:
+    return session.exec(select(Lesson).where(Lesson.slot_id == effective.slot_id, Lesson.date == effective.date)).first()
+
+
 def get_or_create_lesson(session: Session, effective: EffectiveLesson) -> Lesson:
-    lesson = session.exec(
-        select(Lesson).where(Lesson.slot_id == effective.slot_id, Lesson.date == effective.date)
-    ).first()
+    lesson = find_lesson(session, effective)
     if lesson is None:
         lesson = Lesson(
             slot_id=effective.slot_id,
@@ -270,24 +272,19 @@ def visible_sections(session: Session, scope: AccessScope) -> list[tuple[Section
     return list(session.exec(query).all())
 
 
-def open_web_tools(session: Session, scope: AccessScope) -> list[WebTool]:
-    """The web tools opened for the student's current lesson. Looked up by that lesson's slot and date,
-    so free time and the next lesson (even back-to-back, same subject) get none."""
-    if scope.lesson is None:
-        return []
-    return list(
-        session.exec(
-            select(WebTool)
-            .join(LessonWebTool, LessonWebTool.web_tool_id == WebTool.id)
-            .join(Lesson, Lesson.id == LessonWebTool.lesson_id)
-            .where(
-                Lesson.slot_id == scope.lesson.slot_id,
-                Lesson.date == scope.lesson.date,
-                WebTool.subject_id == scope.lesson.subject_id,
-            )
-            .order_by(WebTool.position, WebTool.id)
-        ).all()
-    )
+def open_web_tools(session: Session, scope: AccessScope) -> tuple[Lesson | None, list[WebTool]]:
+    """The student's current lesson and the web tools opened for it. Found by that lesson's slot and
+    date, so free time and the next lesson (even back-to-back, same subject) get none."""
+    lesson = find_lesson(session, scope.lesson) if scope.lesson else None
+    if lesson is None:
+        return lesson, []
+    tools = session.exec(
+        select(WebTool)
+        .join(LessonWebTool, LessonWebTool.web_tool_id == WebTool.id)
+        .where(LessonWebTool.lesson_id == lesson.id, WebTool.subject_id == scope.lesson.subject_id)
+        .order_by(WebTool.position, WebTool.id)
+    ).all()
+    return lesson, list(tools)
 
 
 def student_can_open_section(session: Session, scope: AccessScope, section_id: int) -> bool:

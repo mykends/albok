@@ -4,7 +4,7 @@ import { webToolMode } from '@/lib/kiosk';
 import { cn } from '@/lib/utils';
 import { useWebTools } from '@/stores/web-tools-store';
 import { router, usePathname } from 'expo-router';
-import { AppWindow, BookOpen } from 'lucide-react-native';
+import { AppWindow, BookOpen, type LucideIcon } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { Pressable, View } from 'react-native';
 
@@ -63,7 +63,7 @@ function Tab({
   onPress,
 }: {
   label: string;
-  icon: typeof BookOpen;
+  icon: LucideIcon;
   selected: boolean;
   onPress: () => void;
 }) {
