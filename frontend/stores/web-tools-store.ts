@@ -56,6 +56,9 @@ async function pushToShell(urls: string[], endsInMs: number) {
   }
 }
 
+// Bumped by every poll and by clear(); a poll whose number is stale was overtaken and must not touch the shell or state.
+let pollGeneration = 0;
+
 export const useWebTools = create<WebToolsState>()((set, get) => ({
   lessonId: null,
   tools: [],
@@ -68,16 +71,20 @@ export const useWebTools = create<WebToolsState>()((set, get) => ({
   frames: {},
 
   poll: async () => {
+    const generation = ++pollGeneration;
     let response;
     try {
       response = await api.studentWebTools();
     } catch {
+      if (generation !== pollGeneration) return;
       // Without an answer nothing stays open; the next poll restores what the professor still has open.
       await pushToShell([], 0);
+      if (generation !== pollGeneration) return;
       const state = get();
       if (state.tools.length || state.active !== null || state.notice) set({ tools: [], active: null, status: {}, notice: null });
       return;
     }
+    if (generation !== pollGeneration) return;
     const tools = response.lesson_id === null ? [] : response.tools;
     const endsInMs =
       response.lesson_ends_at === null
@@ -88,6 +95,7 @@ export const useWebTools = create<WebToolsState>()((set, get) => ({
       tools.map((tool) => tool.url),
       endsInMs
     );
+    if (generation !== pollGeneration) return;
 
     const state = get();
     const sameLesson = response.lesson_id === state.lessonId;
@@ -117,6 +125,7 @@ export const useWebTools = create<WebToolsState>()((set, get) => ({
   },
 
   clear: async () => {
+    pollGeneration++;
     await pushToShell([], 0);
     set({
       lessonId: null,

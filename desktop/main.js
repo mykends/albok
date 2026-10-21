@@ -69,6 +69,16 @@ function closeRemovedTools(urls) {
   }
 }
 
+// The preload bridge reaches every page in the main window, including the sign-in origin; only the
+// Albok page may manage or embed web tools.
+function isAlbokPage(url) {
+  try {
+    return new URL(url).origin === new URL(config.url).origin;
+  } catch {
+    return false;
+  }
+}
+
 function isAllowed(target) {
   try {
     const { origin } = new URL(target);
@@ -128,7 +138,7 @@ function lockDownWebTools() {
 
 // Only an open tool's exact link may attach, and only with these options.
 function checkWebToolAttach(event, webPreferences, params) {
-  if (!openTools.allows(params.src)) {
+  if (!isAlbokPage(event.sender.getURL()) || !openTools.allows(params.src)) {
     event.preventDefault();
     return;
   }
@@ -268,7 +278,7 @@ ipcMain.handle('kiosk:sign-out', async () => {
 
 // The web app sends the lesson's open tools on every poll (an empty list when the poll fails).
 ipcMain.handle('kiosk:set-web-tools', (event, payload) => {
-  if (event.sender !== mainWindow?.webContents) return;
+  if (event.sender !== mainWindow?.webContents || !isAlbokPage(event.senderFrame?.url)) return;
   openTools.set(payload?.urls, payload?.endsInMs);
 });
 

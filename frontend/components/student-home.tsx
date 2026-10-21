@@ -20,6 +20,8 @@ import { useTranslation } from 'react-i18next';
 import { Linking, Pressable, View } from 'react-native';
 
 export function openSection(sectionId: number) {
+  // An explicit section pick always shows the material, even if a tool tab was active.
+  useWebTools.getState().setActive(null);
   router.push({ pathname: '/read/[sectionId]', params: { sectionId: String(sectionId) } });
 }
 

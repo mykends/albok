@@ -1,7 +1,14 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 
-const { checkLink, createOpenTools, isSameSite } = require('./web-tools');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const { checkLink, createOpenTools, isSameSite, INTERNAL_SUFFIXES, LINK_SHORTENERS, FILE_EXTENSIONS } = require('./web-tools');
+
+// Shared with backend/tests/test_web_tools.py, so the kiosk and the server copy of the rules keep agreeing.
+const backendDir = path.join(__dirname, '..', 'backend');
+const cases = JSON.parse(fs.readFileSync(path.join(backendDir, 'tests', 'link_rule_cases.json'), 'utf8'));
 
 test('same site: the link host and its subdomains, ignoring a leading www.', () => {
   assert.ok(isSameSite('https://quizlet.com/', 'https://www.quizlet.com/en'));
@@ -11,6 +18,11 @@ test('same site: the link host and its subdomains, ignoring a leading www.', () 
   assert.ok(isSameSite('https://www.quizlet.com/', 'https://a.b.quizlet.com/'));
   assert.ok(isSameSite('https://translate.google.com/', 'https://translate.google.com/?sl=en'));
   assert.ok(isSameSite('https://translate.google.com/', 'https://x.translate.google.com/'));
+});
+
+test('same site: a bare www.<tld> is not stripped into a whole TLD', () => {
+  assert.equal(isSameSite('https://www.com/', 'https://other.com/'), false);
+  assert.ok(isSameSite('https://www.com/', 'https://www.com/x'));
 });
 
 test('same site: everything else is another site', () => {
@@ -63,6 +75,23 @@ test('link rules refuse what the server refuses', () => {
     'https://quizlet.com\\.evil.example/',
   ];
   for (const link of refused) assert.equal(checkLink(link), null, link);
+});
+
+test('shared link cases: accepted links normalize the same as on the server', () => {
+  for (const { link, normalized } of cases.accepted) assert.equal(checkLink(link), normalized, link);
+});
+
+test('shared link cases: refused links are refused', () => {
+  for (const link of cases.refused) assert.equal(checkLink(link), null, link);
+});
+
+test('the rule lists match the server copy in backend/albok_api/web_tools.py', () => {
+  const source = fs.readFileSync(path.join(backendDir, 'albok_api', 'web_tools.py'), 'utf8');
+  const strings = (text) => [...text.matchAll(/"([^"]+)"/g)].map((match) => match[1]);
+  const body = (name, close) => source.match(new RegExp(`^${name} = .(.*?)${close}`, 'ms'))[1];
+  assert.deepEqual(strings(body('INTERNAL_SUFFIXES', '\\)')), INTERNAL_SUFFIXES);
+  assert.deepEqual(new Set(strings(body('LINK_SHORTENERS', '\\}'))), LINK_SHORTENERS);
+  assert.deepEqual(new Set(strings(body('FILE_EXTENSIONS', '\\}'))), FILE_EXTENSIONS);
 });
 
 test('malformed and script links are refused, never thrown', () => {

@@ -47,12 +47,14 @@ function checkLink(raw) {
   if (INTERNAL_SUFFIXES.some((suffix) => host.endsWith(suffix) || host === suffix.slice(1))) return null;
   if (LINK_SHORTENERS.has(host.replace(/^www\./, ''))) return null;
 
-  let filename;
+  // Like the server's lenient unquote: a stray % or a Latin-1 escape keeps the raw segment, not a refusal.
+  let filename = url.pathname.split('/').at(-1);
   try {
-    filename = decodeURIComponent(url.pathname.split('/').at(-1)).toLowerCase();
+    filename = decodeURIComponent(filename);
   } catch {
-    return null;
+    // keep the raw segment
   }
+  filename = filename.toLowerCase();
   if (filename.includes('.') && FILE_EXTENSIONS.has(filename.split('.').at(-1))) return null;
   return url.href;
 }
@@ -63,7 +65,9 @@ function isSameSite(toolUrl, target) {
   const tool = parse(toolUrl);
   const url = parse(target);
   if (!tool || !url || url.protocol !== 'https:' || url.port !== '' || url.username || url.password) return false;
-  const site = bareHost(tool).replace(/^www\./, '');
+  // Only strip www. when a real domain is left, so https://www.com/ doesn't make every .com host same-site.
+  const toolHost = bareHost(tool);
+  const site = /^www\..+\./.test(toolHost) ? toolHost.slice(4) : toolHost;
   const host = bareHost(url);
   return host === site || host.endsWith(`.${site}`);
 }
@@ -104,4 +108,4 @@ function createOpenTools({ onChange = () => {} } = {}) {
   };
 }
 
-module.exports = { checkLink, createOpenTools, isSameSite };
+module.exports = { checkLink, createOpenTools, isSameSite, INTERNAL_SUFFIXES, LINK_SHORTENERS, FILE_EXTENSIONS };

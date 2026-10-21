@@ -1,4 +1,6 @@
+import json
 from datetime import date, datetime, time
+from pathlib import Path
 
 import pytest
 from sqlmodel import select
@@ -11,6 +13,20 @@ from .conftest import TUESDAY, user
 from .test_access import slot_at
 
 # --- Link rules -----------------------------------------------------------------------------------
+
+# Shared with desktop/web-tools.test.js, so the server and the kiosk copy of the rules keep agreeing.
+LINK_RULE_CASES = json.loads((Path(__file__).parent / "link_rule_cases.json").read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize("case", LINK_RULE_CASES["accepted"], ids=lambda case: case["link"])
+def test_shared_accepted_links(case):
+    assert normalize_link(case["link"]) == case["normalized"]
+
+
+@pytest.mark.parametrize("link", LINK_RULE_CASES["refused"])
+def test_shared_refused_links(link):
+    with pytest.raises(InvalidLink):
+        normalize_link(link)
 
 
 @pytest.mark.parametrize(
