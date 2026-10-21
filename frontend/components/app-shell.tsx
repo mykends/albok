@@ -16,6 +16,7 @@ import {
   GraduationCap,
   HardDrive,
   NotebookPen,
+  Presentation,
   School,
   Shuffle,
   Upload,
@@ -29,6 +30,8 @@ import { Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
 const COMPACT_BELOW = 900;
 // Lessons change on the bell; polling this often keeps the time rule visible within seconds.
 const STUDENT_POLL_MS = 20_000;
+// Shows the "Current lesson" entry and keeps the home panel's lessons fresh.
+const PROFESSOR_POLL_MS = 20_000;
 
 export function AppShell({ children }: { children: ReactNode }) {
   const me = useSession((state) => state.me);
@@ -140,6 +143,8 @@ function StaffShell({ children }: { children: ReactNode }) {
   const me = useSession((state) => state.me)!;
   const subjects = useProfessor((state) => state.subjects);
   const refresh = useProfessor((state) => state.refresh);
+  const teaching = useProfessor((state) => state.teaching);
+  const refreshTeaching = useProfessor((state) => state.refreshTeaching);
   const pathname = usePathname();
   const adminTab = useGlobalSearchParams<{ tab?: string }>().tab ?? 'year';
   const { width } = useWindowDimensions();
@@ -148,6 +153,13 @@ function StaffShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (me.is_professor) refresh();
   }, [me.is_professor, refresh]);
+
+  useEffect(() => {
+    if (!me.is_professor) return;
+    void refreshTeaching();
+    const timer = setInterval(() => refreshTeaching(), PROFESSOR_POLL_MS);
+    return () => clearInterval(timer);
+  }, [me.is_professor, refreshTeaching]);
 
   return (
     <View className="flex-1 flex-row bg-background">
@@ -158,6 +170,23 @@ function StaffShell({ children }: { children: ReactNode }) {
         <ScrollView className="flex-1" contentContainerClassName={cn('gap-1 pb-4', compact ? 'items-center' : 'px-3')}>
           {me.is_professor && (
             <>
+              {teaching.length > 0 && (
+                // The home screen holds the panel that opens web tools; without this, a professor
+                // publishing on a subject screen has no way back to it.
+                <View className={compact ? 'pt-1' : 'pt-3'}>
+                  <NavItem
+                    href="/"
+                    label={t('nav.currentLesson')}
+                    compact={compact}
+                    active={pathname === '/'}
+                    leading={
+                      <View className="size-7 items-center justify-center rounded-md bg-primary">
+                        <Icon as={Presentation} size={16} className="text-primary-foreground" />
+                      </View>
+                    }
+                  />
+                </View>
+              )}
               <SectionLabel compact={compact} label={t('nav.mySubjects')} />
               {subjects.map((subject) => (
                 <NavItem

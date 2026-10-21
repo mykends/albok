@@ -1,5 +1,6 @@
 import { EmptyState } from '@/components/empty-state';
 import { ErrorBanner, Grid, Page, PageSection } from '@/components/layout';
+import { CurrentLessonPanel } from '@/components/professor/current-lesson-panel';
 import { SubjectIcon } from '@/components/subject-icon';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -32,6 +33,7 @@ export function ProfessorHome() {
         <Text className="text-muted-foreground">{formatDateLong(serverNow())}</Text>
       </View>
       {error && <ErrorBanner message={error} onRetry={refresh} />}
+      <CurrentLessonPanel />
       <PageSection title={t('nav.mySubjects')}>
         {status === 'loading' || status === 'idle' ? (
           <Grid>{[0, 1].map((n) => <Skeleton key={n} className="h-40 rounded-xl" />)}</Grid>
