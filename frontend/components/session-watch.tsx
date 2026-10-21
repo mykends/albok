@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
 import { api } from '@/lib/api';
+import { kioskBridge } from '@/lib/kiosk';
 import { serverNow, useSession } from '@/stores/session-store';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -31,6 +32,8 @@ export function SessionWatch() {
     };
     for (const name of ACTIVITY_EVENTS) window.addEventListener(name, onActivity, { capture: true, passive: true });
     window.addEventListener('scroll', onActivity, { capture: true, passive: true });
+    // Input inside a web tool goes to the tool, not this page; the kiosk shell passes it on.
+    const stopToolActivity = kioskBridge()?.onWebToolActivity?.(onActivity);
 
     const isStudent = me.is_student && !me.is_professor && !me.is_admin;
     const idleMs = me.idle_minutes * 60_000;
@@ -60,6 +63,7 @@ export function SessionWatch() {
 
     return () => {
       clearInterval(tick);
+      stopToolActivity?.();
       for (const name of ACTIVITY_EVENTS) window.removeEventListener(name, onActivity, { capture: true });
       window.removeEventListener('scroll', onActivity, { capture: true });
     };

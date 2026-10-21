@@ -56,6 +56,7 @@ export default function RootLayout() {
             <Stack.Screen name="read/[sectionId]" />
             <Stack.Protected guard={student}>
               <Stack.Screen name="notes" />
+              <Stack.Screen name="lesson" />
             </Stack.Protected>
             <Stack.Protected guard={!!me?.is_professor}>
               <Stack.Screen name="subjects/[subjectId]" />

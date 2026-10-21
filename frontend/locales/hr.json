@@ -35,7 +35,8 @@
     "mySubjects": "Moji predmeti",
     "administration": "Administracija",
     "forProfessors": "Za nastavnike",
-    "forAdmins": "Administracija"
+    "forAdmins": "Administracija",
+    "currentLesson": "Trenutni sat"
   },
   "login": {
     "title": "Prijava",
@@ -136,7 +137,8 @@
       "books": "Gradivo",
       "presets": "Predlošci",
       "preview": "Pregled kao učenik",
-      "settings": "Postavke"
+      "settings": "Postavke",
+      "webTools": "Web alati"
     },
     "publishFor": "Objava za razred:",
     "publishHint": "Učenici vide samo objavljene cjeline. Nove datoteke su skrivene dok ih ne objavite; izmjene vrijede odmah.",
@@ -225,6 +227,49 @@
     "selected_one": "Odabrana je {{count}} cjelina",
     "selected_few": "Odabrane su {{count}} cjeline",
     "selected_other": "Odabrano je {{count}} cjelina"
+  },
+  "webTools": {
+    "hint": "Web alati su vanjske stranice, npr. online rječnik ili kartice za vježbu, koje tijekom sata možete otvoriti učenicima. U kiosku se učenik može kretati samo po stranici alata. Popis ostaje i iduće školske godine.",
+    "emptyTitle": "Još nema web alata",
+    "empty": "Dodajte stranicu koju želite koristiti na satu.",
+    "name": "Naziv",
+    "namePlaceholder": "npr. Cambridge Dictionary",
+    "url": "Poveznica",
+    "urlHint": "Otvorite stranicu u pregledniku i kopirajte adresu koja se tada prikaže, a ne skraćenu poveznicu.",
+    "add": "Dodaj alat",
+    "try": "Isprobaj",
+    "tryHint": "Otvara alat u vašem pregledniku. Učenicima se time ne otvara.",
+    "moveUp": "Pomakni gore",
+    "moveDown": "Pomakni dolje",
+    "delete": "Obriši alat",
+    "deleteTitle": "Obrisati „{{name}}”?",
+    "deleteDescription": "Alat se uklanja s popisa. Ako je upravo otvoren na satu, učenicima se zatvara.",
+    "lesson": {
+      "title": "Sada predajete",
+      "summary": "{{className}} · {{subject}} · {{start}}–{{end}}",
+      "substitute": "Zamjena",
+      "hint": "Otvoreni alati prikazuju se učenicima ovog sata u kiosku, uz gradivo. Zatvaraju se kad sat završi.",
+      "open": "Otvori učenicima",
+      "close": "Zatvori",
+      "isOpen": "Otvoreno",
+      "noTools": "Na popisu ovog predmeta još nema web alata. Dodajte jedan ovdje ili na kartici Web alati predmeta.",
+      "noToolsSubstitute": "Na popisu ovog predmeta nema web alata.",
+      "addTitle": "Novi alat",
+      "addAndOpen": "Dodaj i otvori"
+    },
+    "student": {
+      "row": "Web alati",
+      "material": "Gradivo",
+      "noticeTitle": "Profesor je otvorio web alat",
+      "noticeHint": "Alat je u kartici uz gradivo. Možete ga otvoriti kad želite.",
+      "noticeHintLinks": "Poveznicu na alat nalazite na kartici sata.",
+      "open": "Otvori",
+      "unreachable": "Ovaj alat trenutačno nije dostupan sa školske mreže.",
+      "wrongSite": "Poveznica ovog alata vodi na drugu stranicu. Javite profesoru.",
+      "notAllowed": "Ta stranica nije dopuštena na ovom satu.",
+      "noneTitle": "Nema otvorenih web alata",
+      "none": "Profesor trenutačno nije otvorio nijedan web alat za ovaj sat."
+    }
   },
   "preview": {
     "asClass": "Prikaži kako vidi razred:",

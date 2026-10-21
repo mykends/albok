@@ -10,7 +10,7 @@ from .clock import Clock
 from .config import settings
 from .db import create_db_engine, init_db
 from .oidc import OIDCClient
-from .routers import admin, auth, content, exports, reader, student
+from .routers import admin, auth, content, exports, reader, student, web_tools
 
 log = logging.getLogger(__name__)
 
@@ -86,6 +86,7 @@ def create_app(
     app.include_router(reader.router)
     app.include_router(exports.router)
     app.include_router(content.router)
+    app.include_router(web_tools.router)
     app.include_router(admin.router)
     if mock:
         from . import mock_oidc

@@ -1,13 +1,17 @@
 import { SignOutButton } from '@/components/sign-out-button';
 import { SubjectIcon } from '@/components/subject-icon';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { WebToolLayer } from '@/components/web-tools/web-tool-layer';
+import { WebToolNotice } from '@/components/web-tools/web-tool-notice';
 import { Icon } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
 import { formatTime } from '@/lib/format';
+import { webToolMode } from '@/lib/kiosk';
 import { cn } from '@/lib/utils';
 import { useProfessor } from '@/stores/professor-store';
 import { useSession } from '@/stores/session-store';
 import { useStudent } from '@/stores/student-store';
+import { useWebTools } from '@/stores/web-tools-store';
 import { Link, useGlobalSearchParams, usePathname, type Href } from 'expo-router';
 import {
   BookOpen,
@@ -16,6 +20,7 @@ import {
   GraduationCap,
   HardDrive,
   NotebookPen,
+  Presentation,
   School,
   Shuffle,
   Upload,
@@ -29,6 +34,10 @@ import { Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
 const COMPACT_BELOW = 900;
 // Lessons change on the bell; polling this often keeps the time rule visible within seconds.
 const STUDENT_POLL_MS = 20_000;
+// During a lesson the open web tools are polled faster, so opening or closing one reaches students in seconds.
+const WEB_TOOLS_POLL_MS = 5_000;
+// Shows the "Current lesson" entry and keeps the home panel's lessons fresh.
+const PROFESSOR_POLL_MS = 20_000;
 
 export function AppShell({ children }: { children: ReactNode }) {
   const me = useSession((state) => state.me);
@@ -58,8 +67,11 @@ function StudentShell({ children }: { children: ReactNode }) {
   const me = useSession((state) => state.me)!;
   const now = useStudent((state) => state.now);
   const refresh = useStudent((state) => state.refresh);
+  const pollWebTools = useWebTools((state) => state.poll);
+  const clearWebTools = useWebTools((state) => state.clear);
   const pathname = usePathname();
   const { width } = useWindowDimensions();
+  const lessonId = now?.lesson?.id ?? null;
 
   useEffect(() => {
     refresh();
@@ -67,12 +79,28 @@ function StudentShell({ children }: { children: ReactNode }) {
     return () => clearInterval(timer);
   }, [refresh]);
 
+  // Web tools exist only during a lesson; a new lesson (or signing out) starts with none.
+  useEffect(() => {
+    if (lessonId === null || webToolMode() === 'hidden') return;
+    void pollWebTools();
+    const timer = setInterval(() => pollWebTools(), WEB_TOOLS_POLL_MS);
+    return () => {
+      clearInterval(timer);
+      void clearWebTools();
+    };
+  }, [lessonId, pollWebTools, clearWebTools]);
+
   return (
     <View className="flex-1 bg-background">
       <View className="flex-row items-center gap-4 border-b border-border bg-muted/40 px-4 py-2.5">
         <Logo />
         <View className="flex-row gap-1">
-          <TopLink href="/" icon={BookOpen} label={t('nav.material')} active={pathname === '/' || pathname.startsWith('/read')} />
+          <TopLink
+            href="/"
+            icon={BookOpen}
+            label={t('nav.material')}
+            active={pathname === '/' || pathname.startsWith('/read') || pathname === '/lesson'}
+          />
           <TopLink href="/notes" icon={NotebookPen} label={t('nav.notebook')} active={pathname === '/notes'} />
         </View>
         <View className="flex-1 items-center">
@@ -104,6 +132,8 @@ function StudentShell({ children }: { children: ReactNode }) {
         <SignOutButton compact={width < COMPACT_BELOW} />
       </View>
       <View className="flex-1">{children}</View>
+      <WebToolLayer />
+      <WebToolNotice />
     </View>
   );
 }
@@ -140,6 +170,8 @@ function StaffShell({ children }: { children: ReactNode }) {
   const me = useSession((state) => state.me)!;
   const subjects = useProfessor((state) => state.subjects);
   const refresh = useProfessor((state) => state.refresh);
+  const teaching = useProfessor((state) => state.teaching);
+  const refreshTeaching = useProfessor((state) => state.refreshTeaching);
   const pathname = usePathname();
   const adminTab = useGlobalSearchParams<{ tab?: string }>().tab ?? 'year';
   const { width } = useWindowDimensions();
@@ -148,6 +180,13 @@ function StaffShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (me.is_professor) refresh();
   }, [me.is_professor, refresh]);
+
+  useEffect(() => {
+    if (!me.is_professor) return;
+    void refreshTeaching();
+    const timer = setInterval(() => refreshTeaching(), PROFESSOR_POLL_MS);
+    return () => clearInterval(timer);
+  }, [me.is_professor, refreshTeaching]);
 
   return (
     <View className="flex-1 flex-row bg-background">
@@ -158,6 +197,23 @@ function StaffShell({ children }: { children: ReactNode }) {
         <ScrollView className="flex-1" contentContainerClassName={cn('gap-1 pb-4', compact ? 'items-center' : 'px-3')}>
           {me.is_professor && (
             <>
+              {teaching.length > 0 && (
+                // The home screen holds the panel that opens web tools; without this, a professor
+                // publishing on a subject screen has no way back to it.
+                <View className={compact ? 'pt-1' : 'pt-3'}>
+                  <NavItem
+                    href="/"
+                    label={t('nav.currentLesson')}
+                    compact={compact}
+                    active={pathname === '/'}
+                    leading={
+                      <View className="size-7 items-center justify-center rounded-md bg-primary">
+                        <Icon as={Presentation} size={16} className="text-primary-foreground" />
+                      </View>
+                    }
+                  />
+                </View>
+              )}
               <SectionLabel compact={compact} label={t('nav.mySubjects')} />
               {subjects.map((subject) => (
                 <NavItem

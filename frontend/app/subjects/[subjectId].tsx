@@ -5,6 +5,7 @@ import { PresetsTab } from '@/components/professor/presets-tab';
 import { PreviewTab } from '@/components/professor/preview-tab';
 import { SettingsTab } from '@/components/professor/settings-tab';
 import { useBooks } from '@/components/professor/use-books';
+import { WebToolsTab } from '@/components/professor/web-tools-tab';
 import { SubjectIcon } from '@/components/subject-icon';
 import { Icon } from '@/components/ui/icon';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -15,12 +16,12 @@ import { errorMessage } from '@/lib/i18n';
 import { useProfessor } from '@/stores/professor-store';
 import { useLocalSearchParams } from 'expo-router';
 import Head from 'expo-router/head';
-import { CircleAlert, Eye, Library, ListChecks, Settings } from 'lucide-react-native';
+import { CircleAlert, Eye, Globe, Library, ListChecks, Settings } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
-type Tab = 'books' | 'presets' | 'preview' | 'settings';
+type Tab = 'books' | 'presets' | 'webTools' | 'preview' | 'settings';
 
 export default function SubjectScreen() {
   const { t } = useTranslation();
@@ -82,6 +83,10 @@ export default function SubjectScreen() {
             <Icon as={ListChecks} size={14} />
             <Text>{t('professor.tabs.presets')}</Text>
           </TabsTrigger>
+          <TabsTrigger value="webTools" className="px-3">
+            <Icon as={Globe} size={14} />
+            <Text>{t('professor.tabs.webTools')}</Text>
+          </TabsTrigger>
           <TabsTrigger value="preview" className="px-3">
             <Icon as={Eye} size={14} />
             <Text>{t('professor.tabs.preview')}</Text>
@@ -96,6 +101,9 @@ export default function SubjectScreen() {
         </TabsContent>
         <TabsContent value="presets" className="gap-4">
           {tab === 'presets' && <PresetsTab subject={subject} books={books.books ?? []} onApplied={books.replaceAll} />}
+        </TabsContent>
+        <TabsContent value="webTools" className="gap-4">
+          {tab === 'webTools' && <WebToolsTab subject={subject} />}
         </TabsContent>
         <TabsContent value="preview" className="gap-4">
           {tab === 'preview' && <PreviewTab subject={subject} />}

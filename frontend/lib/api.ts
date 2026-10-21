@@ -86,6 +86,14 @@ export type Note = {
 
 export type ExportQuota = { email: string | null; subject_available: boolean; all_available: boolean };
 
+export type StudentWebTool = { id: number; name: string; url: string };
+export type StudentWebTools = {
+  lesson_id: number | null;
+  lesson_ends_at: string | null;
+  server_time: string;
+  tools: StudentWebTool[];
+};
+
 // --- Professor ---
 
 export type ProfessorSubject = SubjectInfo & {
@@ -131,6 +139,20 @@ export type Book = {
 export type SectionDraft = { title: string; page_start: number; page_end: number };
 export type ReplaceProposal = { file: BookFile; suggestions: SectionDraft[]; mapping: Record<string, number | null> };
 export type Preset = { id: number; subject_id: number; year_level: number; section_ids: number[] };
+export type WebTool = { id: number; subject_id: number; name: string; url: string; position: number };
+export type TeachingLesson = {
+  lesson_id: number;
+  date: string;
+  starts_at: string;
+  ends_at: string;
+  class_name: string;
+  subject_id: number;
+  subject_name: string;
+  substitute: boolean;
+  /** False for a substitute covering another professor's Subject: he opens its tools but can't add any. */
+  can_edit_tools: boolean;
+  tools: (WebTool & { open: boolean })[];
+};
 
 // --- Admin ---
 
@@ -300,6 +322,7 @@ export const api = {
   exportQuota: () => request<ExportQuota>('/api/exports/quota'),
   requestExport: (kind: 'subject' | 'all', subjectId?: number) =>
     request<{ email: string }>('/api/exports', json('POST', { kind, subject_id: subjectId ?? null })),
+  studentWebTools: () => request<StudentWebTools>('/api/student/web-tools', { passive: true }),
 
   // Professor
   mySubjects: () => request<ProfessorSubject[]>('/api/professor/subjects'),
@@ -344,6 +367,17 @@ export const api = {
     request<Preset>(`/api/presets/${id}`, json('PUT', { section_ids: sectionIds })),
   deletePreset: (id: number) => request<void>(`/api/presets/${id}`, del),
   applyPreset: (id: number, classId: number) => request<Book[]>(`/api/presets/${id}/apply/${classId}`, json('POST')),
+  webTools: (subjectId: number) => request<WebTool[]>(`/api/subjects/${subjectId}/web-tools`),
+  createWebTool: (subjectId: number, name: string, url: string) =>
+    request<WebTool>(`/api/subjects/${subjectId}/web-tools`, json('POST', { name, url })),
+  updateWebTool: (id: number, patch: Partial<Pick<WebTool, 'name' | 'url' | 'position'>>) =>
+    request<WebTool>(`/api/web-tools/${id}`, json('PATCH', patch)),
+  deleteWebTool: (id: number) => request<void>(`/api/web-tools/${id}`, del),
+  teaching: (passive = false) => request<TeachingLesson[]>('/api/professor/now', { passive }),
+  setLessonTool: (lessonId: number, toolId: number, open: boolean) =>
+    request<TeachingLesson>(`/api/lessons/${lessonId}/web-tools/${toolId}`, json('PUT', { open })),
+  addLessonTool: (lessonId: number, name: string, url: string) =>
+    request<TeachingLesson>(`/api/lessons/${lessonId}/web-tools`, json('POST', { name, url })),
   preview: (classId: number, subjectId: number) =>
     request<StudentSubject[]>(`/api/professor/preview/${classId}?subject_id=${subjectId}`),
 

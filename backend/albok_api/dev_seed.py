@@ -1,5 +1,5 @@
-"""Development data for the mock login: one school year, two classes, the mock users, a timetable and
-three published books. Runs once, on an empty database, when ALBOK_MOCK_OIDC=1."""
+"""Development data for the mock login: one school year, two classes, the mock users, a timetable,
+three published books and two web tools. Runs once, on an empty database, when ALBOK_MOCK_OIDC=1."""
 
 import logging
 from datetime import date
@@ -10,8 +10,9 @@ from sqlmodel import Session, select
 
 from .clock import Clock
 from .documents import new_file_paths, process_file, store_bytes
-from .models import Book, BookFile, Publication, SchoolClass, SchoolYear, Section, Subject, User
+from .models import Book, BookFile, Publication, SchoolClass, SchoolYear, Section, Subject, User, WebTool
 from .school_csv import import_roster, import_timetable
+from .web_tools import InvalidLink, normalize_link
 
 log = logging.getLogger(__name__)
 SAMPLES = Path(__file__).resolve().parent.parent / "samples"
@@ -28,6 +29,7 @@ PERIODS = ["08:00-08:45", "08:50-09:35", "09:40-10:25", "10:40-11:25", "11:30-12
 SUBJECTS = [("Povijest", "ivana.horvat@skole.hr"), ("Matematika", "marko.kovac@skole.hr"),
             ("Geografija", "ivana.horvat@skole.hr"), ("Fizika", "marko.kovac@skole.hr"),
             ("Engleski jezik", "maja.juric@skole.hr")]  # fmt: skip
+WEB_TOOLS = [("Cambridge Dictionary", "https://dictionary.cambridge.org/"), ("Quizlet", "https://quizlet.com/")]
 
 HISTORY_TEXT = """# Povijest 3
 
@@ -90,6 +92,16 @@ def _add_book(session: Session, engine: Engine, subject: Subject, title: str, fi
     session.commit()
 
 
+def _add_web_tools(session: Session, subject: Subject) -> None:
+    for position, (name, url) in enumerate(WEB_TOOLS):
+        try:
+            url = normalize_link(url)
+        except InvalidLink as error:
+            raise RuntimeError(f"Seed web tool {name} is invalid: {error}") from None
+        session.add(WebTool(subject_id=subject.id, name=name, url=url, position=position))
+    session.commit()
+
+
 def seed_if_empty(engine: Engine, clock: Clock) -> None:
     with Session(engine) as session:
         if session.exec(select(SchoolYear)).first() is not None:
@@ -117,3 +129,4 @@ def seed_if_empty(engine: Engine, clock: Clock) -> None:
         _add_book(session, engine, math, "Osnove algebre", "algebra-basics.md", (SAMPLES / "algebra-basics.md").read_text(), [b3])
         _add_book(session, engine, history, "Povijest 3", "povijest-3.md", HISTORY_TEXT, [b3])
         _add_book(session, engine, english, "English Grammar Basics", "english-grammar-basics.md", (SAMPLES / "english-grammar-basics.md").read_text(), [b3])
+        _add_web_tools(session, english)

@@ -17,6 +17,7 @@ from .models import (
     Enrollment,
     Lesson,
     LessonOverride,
+    LessonWebTool,
     Publication,
     SchoolClass,
     SchoolYear,
@@ -25,6 +26,7 @@ from .models import (
     TeachingAssignment,
     TimetableSlot,
     User,
+    WebTool,
 )
 
 # Content for a lesson opens this long before the bell.
@@ -150,10 +152,12 @@ def open_lesson(lessons: list[EffectiveLesson], now: datetime) -> EffectiveLesso
     return candidates[-1] if candidates else None
 
 
+def find_lesson(session: Session, effective: EffectiveLesson) -> Lesson | None:
+    return session.exec(select(Lesson).where(Lesson.slot_id == effective.slot_id, Lesson.date == effective.date)).first()
+
+
 def get_or_create_lesson(session: Session, effective: EffectiveLesson) -> Lesson:
-    lesson = session.exec(
-        select(Lesson).where(Lesson.slot_id == effective.slot_id, Lesson.date == effective.date)
-    ).first()
+    lesson = find_lesson(session, effective)
     if lesson is None:
         lesson = Lesson(
             slot_id=effective.slot_id,
@@ -268,8 +272,32 @@ def visible_sections(session: Session, scope: AccessScope) -> list[tuple[Section
     return list(session.exec(query).all())
 
 
+def open_web_tools(session: Session, scope: AccessScope) -> tuple[Lesson | None, list[WebTool]]:
+    """The student's current lesson and the web tools opened for it. Found by that lesson's slot and
+    date, so free time and the next lesson (even back-to-back, same subject) get none."""
+    lesson = find_lesson(session, scope.lesson) if scope.lesson else None
+    if lesson is None:
+        return lesson, []
+    tools = session.exec(
+        select(WebTool)
+        .join(LessonWebTool, LessonWebTool.web_tool_id == WebTool.id)
+        .where(LessonWebTool.lesson_id == lesson.id, WebTool.subject_id == scope.lesson.subject_id)
+        .order_by(WebTool.position, WebTool.id)
+    ).all()
+    return lesson, list(tools)
+
+
 def student_can_open_section(session: Session, scope: AccessScope, section_id: int) -> bool:
     return any(section.id == section_id for section, _ in visible_sections(session, scope))
+
+
+def teaching_now(session: Session, user: User, now: datetime) -> list[EffectiveLesson]:
+    """Lessons the user teaches whose window is open now, as owner or substitute (after overrides).
+    Only these lessons can have web tools opened."""
+    year = current_school_year(session, now.date())
+    if year is None:
+        return []
+    return [lesson for lesson in lessons_on(session, year, now.date()) if lesson.professor_id == user.id and lesson.is_open(now)]
 
 
 def substitute_can_access(session: Session, user: User, subject_id: int, class_id: int | None, now: datetime) -> bool:

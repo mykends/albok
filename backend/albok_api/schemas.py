@@ -108,6 +108,20 @@ class NowRead(BaseModel):
     subjects: list[StudentSubject]
 
 
+class StudentWebTool(BaseModel):
+    id: int
+    name: str
+    url: str
+
+
+class StudentWebTools(BaseModel):
+    lesson_id: int | None
+    # With server_time, lets the kiosk close the tools at the bell by its own clock.
+    lesson_ends_at: datetime | None
+    server_time: datetime
+    tools: list[StudentWebTool]
+
+
 class ReaderSection(BaseModel):
     id: int
     title: str
@@ -295,6 +309,50 @@ class PresetWrite(BaseModel):
 
 class PresetUpdate(BaseModel):
     section_ids: list[int]
+
+
+class WebToolRead(BaseModel):
+    id: int
+    subject_id: int
+    name: str
+    url: str
+    position: int
+
+
+class WebToolWrite(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    # Checked by web_tools.normalize_link, which gives the professor a reason.
+    url: str = Field(max_length=2000)
+
+
+class WebToolUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    url: str | None = Field(default=None, max_length=2000)
+    position: int | None = Field(default=None, ge=0)
+
+
+class WebToolOpenState(BaseModel):
+    open: bool
+
+
+class LessonToolState(WebToolRead):
+    open: bool
+
+
+class TeachingLesson(BaseModel):
+    """A lesson the professor is teaching right now, with the subject's web tools."""
+
+    lesson_id: int
+    date: date
+    starts_at: time
+    ends_at: time
+    class_name: str
+    subject_id: int
+    subject_name: str
+    substitute: bool
+    # False for a substitute covering another professor's Subject: he may open its tools, not change the list.
+    can_edit_tools: bool
+    tools: list[LessonToolState]
 
 
 # --- Admin ------------------------------------------------------------------------------------

@@ -5,18 +5,23 @@ import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
+import { useOpenWebTool } from '@/components/web-tools/lesson-tabs';
 import type { SectionRef, StudentSubject } from '@/lib/api';
 import { formatDateLong, formatTime } from '@/lib/format';
+import { webToolMode } from '@/lib/kiosk';
 import { tint } from '@/lib/subjects';
 import { serverNow, useSession } from '@/stores/session-store';
 import { useStudent } from '@/stores/student-store';
+import { useWebTools } from '@/stores/web-tools-store';
 import { router } from 'expo-router';
 import Head from 'expo-router/head';
-import { BookOpen, ChevronRight, Library, NotebookPen } from 'lucide-react-native';
+import { AppWindow, BookOpen, ChevronRight, ExternalLink, Library, NotebookPen } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
-import { Pressable, View } from 'react-native';
+import { Linking, Pressable, View } from 'react-native';
 
 export function openSection(sectionId: number) {
+  // An explicit section pick always shows the material, even if a tool tab was active.
+  useWebTools.getState().setActive(null);
   router.push({ pathname: '/read/[sectionId]', params: { sectionId: String(sectionId) } });
 }
 
@@ -82,6 +87,37 @@ function LessonCard({ subject, title, time }: { subject?: StudentSubject; title:
       ) : (
         <Text className="text-muted-foreground">{t('student.nothingPublished')}</Text>
       )}
+      <WebToolsRow />
+    </View>
+  );
+}
+
+/** The lesson's web tools: the lasting way in once the notice is gone. In the kiosk they open as tabs;
+ * elsewhere they are plain links to a new browser tab; an older kiosk shows none (KTD8). */
+function WebToolsRow() {
+  const { t } = useTranslation();
+  const tools = useWebTools((state) => state.tools);
+  const openTool = useOpenWebTool();
+  const mode = webToolMode();
+  if (mode === 'hidden' || tools.length === 0) return null;
+  return (
+    <View className="gap-2 border-t border-border pt-4">
+      <Text className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{t('webTools.student.row')}</Text>
+      <View className="flex-row flex-wrap gap-2">
+        {tools.map((tool) =>
+          mode === 'tabs' ? (
+            <Button key={tool.id} variant="outline" onPress={() => openTool(tool.id)}>
+              <Icon as={AppWindow} />
+              <Text>{tool.name}</Text>
+            </Button>
+          ) : (
+            <Button key={tool.id} variant="outline" role="link" onPress={() => Linking.openURL(tool.url)}>
+              <Icon as={ExternalLink} />
+              <Text>{tool.name}</Text>
+            </Button>
+          )
+        )}
+      </View>
     </View>
   );
 }
