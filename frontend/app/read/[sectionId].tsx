@@ -1,18 +1,20 @@
 import { EmptyState } from '@/components/empty-state';
-import { LessonNoteEditor } from '@/components/lesson-note-editor';
+import { LessonNotePane } from '@/components/lesson-note-pane';
 import { PdfViewer } from '@/components/pdf-viewer';
 import { SubjectIcon } from '@/components/subject-icon';
+import { LessonTabs } from '@/components/web-tools/lesson-tabs';
+import { WebToolPlaceholder } from '@/components/web-tools/web-tool-layer';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
-import { api, ApiError, type Note, type ReaderSection } from '@/lib/api';
+import { api, ApiError, type ReaderSection } from '@/lib/api';
 import { errorMessage } from '@/lib/i18n';
-import { useNoteSync } from '@/lib/note-sync';
 import { cn } from '@/lib/utils';
 import { READER_ZOOM, usePreferencesStore } from '@/stores/preferences-store';
 import { useSession } from '@/stores/session-store';
 import { useStudent } from '@/stores/student-store';
+import { useWebTools } from '@/stores/web-tools-store';
 import { router, useLocalSearchParams } from 'expo-router';
 import Head from 'expo-router/head';
 import {
@@ -28,7 +30,7 @@ import {
 } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Platform, ScrollView, useWindowDimensions, View } from 'react-native';
+import { Platform, useWindowDimensions, View } from 'react-native';
 
 export default function ReaderScreen() {
   const { t } = useTranslation();
@@ -58,9 +60,11 @@ export default function ReaderScreen() {
     };
   }, [sectionId, previewClassId, lessonKey]);
 
-  // Sections opened during a lesson are linked to that lesson's note.
+  // Sections opened during a lesson are linked to that lesson's note, and web tool buttons return here.
   useEffect(() => {
-    if (isStudent && section && lessonKey.startsWith('lesson')) api.sectionOpened(section.id).catch(() => {});
+    if (!isStudent || !section || !lessonKey.startsWith('lesson')) return;
+    api.sectionOpened(section.id).catch(() => {});
+    useWebTools.getState().setLastSection(section.id);
   }, [isStudent, section, lessonKey]);
 
   if (error) {
@@ -99,6 +103,7 @@ function Reader({
   const changeZoom = usePreferencesStore((state) => state.changeReaderZoom);
   const notesPanelOpen = usePreferencesStore((state) => state.notesPanelOpen);
   const toggleNotesPanel = usePreferencesStore((state) => state.toggleNotesPanel);
+  const toolOpen = useWebTools((state) => state.active !== null && state.tools.some((tool) => tool.id === state.active));
   const { width } = useWindowDimensions();
 
   const go = (id: number | null) => {
@@ -184,92 +189,34 @@ function Reader({
 
       <View className="flex-1 flex-row">
         <View className="flex-1">
-          <PdfViewer key={section.id} url={api.sectionPdfUrl(section.id, previewClassId)} zoom={zoom} />
-          <View className="flex-row items-center gap-3 border-t border-border px-4 py-2">
-            <View className="flex-1 items-start">
-              <Button variant="outline" size="sm" disabled={!section.prev_id} onPress={() => go(section.prev_id)}>
-                <Icon as={ChevronLeft} />
-                <Text>{t('reader.previous')}</Text>
-              </Button>
-            </View>
-            <Text className="text-xs tabular-nums text-muted-foreground">
-              {t('reader.position', { index: section.index + 1, total: section.total, pages: section.page_count })}
-            </Text>
-            <View className="flex-1 items-end">
-              <Button size="sm" disabled={!section.next_id} onPress={() => go(section.next_id)}>
-                <Text>{t('reader.next')}</Text>
-                <Icon as={ChevronRight} />
-              </Button>
+          {!previewClassId && <LessonTabs />}
+          {toolOpen && !previewClassId && <WebToolPlaceholder />}
+          {/* Stays mounted under a tool tab, so the material keeps its place. */}
+          <View className={cn('flex-1', toolOpen && !previewClassId && 'hidden')}>
+            <PdfViewer key={section.id} url={api.sectionPdfUrl(section.id, previewClassId)} zoom={zoom} />
+            <View className="flex-row items-center gap-3 border-t border-border px-4 py-2">
+              <View className="flex-1 items-start">
+                <Button variant="outline" size="sm" disabled={!section.prev_id} onPress={() => go(section.prev_id)}>
+                  <Icon as={ChevronLeft} />
+                  <Text>{t('reader.previous')}</Text>
+                </Button>
+              </View>
+              <Text className="text-xs tabular-nums text-muted-foreground">
+                {t('reader.position', { index: section.index + 1, total: section.total, pages: section.page_count })}
+              </Text>
+              <View className="flex-1 items-end">
+                <Button size="sm" disabled={!section.next_id} onPress={() => go(section.next_id)}>
+                  <Text>{t('reader.next')}</Text>
+                  <Icon as={ChevronRight} />
+                </Button>
+              </View>
             </View>
           </View>
         </View>
         {showNotes && notesPanelOpen && (
-          <NotesPanel subjectId={section.subject.id} className={width < 1100 ? 'w-80' : 'w-[26rem]'} />
+          <LessonNotePane subjectId={section.subject.id} className={width < 1100 ? 'w-80' : 'w-[26rem]'} />
         )}
       </View>
-    </View>
-  );
-}
-
-/** During a lesson: this lesson's note, then earlier notes of the subject (read-only).
- * Outside lessons: the subject's notes, all editable. */
-function NotesPanel({ subjectId, className }: { subjectId: number; className?: string }) {
-  const { t } = useTranslation();
-  const now = useStudent((state) => state.now);
-  const saved = useNoteSync((state) => state.saved);
-  const lessonId = now?.lesson?.subject_id === subjectId ? now.lesson.id : null;
-  const [current, setCurrent] = useState<Note | null>(null);
-  const [notes, setNotes] = useState<Note[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    setError(null);
-    Promise.all([api.notes(subjectId), lessonId ? api.note(lessonId) : Promise.resolve(null)])
-      .then(([list, note]) => {
-        if (cancelled) return;
-        setNotes(list.filter((n) => n.lesson_id !== lessonId));
-        setCurrent(note);
-      })
-      .catch((e) => !cancelled && setError(errorMessage(e)));
-    return () => {
-      cancelled = true;
-    };
-  }, [subjectId, lessonId, now?.mode]);
-
-  const currentNote = current && (saved[current.lesson_id] ?? current);
-
-  return (
-    <View className={cn('border-l border-border bg-muted/30', className)}>
-      <ScrollView contentContainerClassName="gap-5 p-4">
-        {error && <Text className="text-sm text-destructive">{error}</Text>}
-        {currentNote && (
-          <View className="gap-2">
-            <Text className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{t('notes.thisLesson')}</Text>
-            <Text className="font-semibold">{currentNote.title}</Text>
-            <LessonNoteEditor note={currentNote} autoFocus />
-          </View>
-        )}
-        {!lessonId && now?.lesson && (
-          <Text className="text-sm text-muted-foreground">{t('notes.otherSubjectLesson', { subject: now.lesson.subject_name })}</Text>
-        )}
-        {notes && notes.length > 0 && (
-          <View className="gap-4">
-            <Text className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              {lessonId ? t('notes.earlier') : t('notes.subjectNotes')}
-            </Text>
-            {notes.map((note) => (
-              <View key={note.lesson_id} className="gap-1.5">
-                <Text className="text-sm font-semibold">{note.title}</Text>
-                <LessonNoteEditor note={saved[note.lesson_id] ?? note} minHeight="min-h-24" />
-              </View>
-            ))}
-          </View>
-        )}
-        {notes && notes.length === 0 && !currentNote && (
-          <Text className="text-sm text-muted-foreground">{t('notes.noneForSubject')}</Text>
-        )}
-      </ScrollView>
     </View>
   );
 }

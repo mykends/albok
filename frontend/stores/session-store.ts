@@ -1,4 +1,5 @@
 import { api, setUnauthorizedHandler, type Me } from '@/lib/api';
+import { kioskBridge } from '@/lib/kiosk';
 import { flushNotes, startNoteSync, wipeLocalNotes } from '@/lib/note-sync';
 import { router } from 'expo-router';
 import { create } from 'zustand';
@@ -15,12 +16,6 @@ type SessionState = {
   /** Returns 'unsynced' (and stays signed in) if a manual sign-out would lose notes, unless forced. */
   signOut: (reason: SignOutReason, options?: { force?: boolean }) => Promise<'done' | 'unsynced'>;
 };
-
-type KioskBridge = { signOut?: () => Promise<void> | void };
-
-function kiosk(): KioskBridge | undefined {
-  return (globalThis as { albokKiosk?: KioskBridge }).albokKiosk;
-}
 
 export const useSession = create<SessionState>()((set, get) => ({
   status: 'loading',
@@ -55,7 +50,7 @@ export const useSession = create<SessionState>()((set, get) => ({
     }
     set({ status: 'signed-out', me: null, lastSignOut: reason });
     // The kiosk shell wipes its session partition (cookies, storage, cache) for the next student.
-    await kiosk()?.signOut?.();
+    await kioskBridge()?.signOut?.();
     if (endSessionUrl && typeof window !== 'undefined') {
       // Also end the AAI@EduHr session, or the next student could be signed in as this one.
       window.location.assign(endSessionUrl);

@@ -256,6 +256,19 @@
       "noToolsSubstitute": "Na popisu ovog predmeta nema web alata.",
       "addTitle": "Novi alat",
       "addAndOpen": "Dodaj i otvori"
+    },
+    "student": {
+      "row": "Web alati",
+      "material": "Gradivo",
+      "noticeTitle": "Profesor je otvorio web alat",
+      "noticeHint": "Alat je u kartici uz gradivo. Možete ga otvoriti kad želite.",
+      "noticeHintLinks": "Poveznicu na alat nalazite na kartici sata.",
+      "open": "Otvori",
+      "unreachable": "Ovaj alat trenutačno nije dostupan sa školske mreže.",
+      "wrongSite": "Poveznica ovog alata vodi na drugu stranicu. Javite profesoru.",
+      "notAllowed": "Ta stranica nije dopuštena na ovom satu.",
+      "noneTitle": "Nema otvorenih web alata",
+      "none": "Profesor trenutačno nije otvorio nijedan web alat za ovaj sat."
     }
   },
   "preview": {
