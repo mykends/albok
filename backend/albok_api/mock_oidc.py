@@ -54,6 +54,7 @@ MOCK_USERS = [
     MockUser("mock-admin", "ana.admin@skole.hr", "Ana Admin", "djelatnik", "nenastavno osoblje", "administratorica"),
     MockUser("mock-prof-1", "ivana.horvat@skole.hr", "Ivana Horvat", "djelatnik", "nastavno osoblje", "Povijest, Geografija"),
     MockUser("mock-prof-2", "marko.kovac@skole.hr", "Marko Kovač", "djelatnik", "nastavno osoblje", "Matematika, Fizika"),
+    MockUser("mock-prof-3", "maja.juric@skole.hr", "Maja Jurić", "djelatnik", "nastavno osoblje", "Engleski jezik"),
     MockUser("mock-student-1", "luka.babic@skole.hr", "Luka Babić", "učenik", note="3.B"),
     MockUser("mock-student-2", "ana.maric@skole.hr", "Ana Marić", "učenik", note="3.B"),
     MockUser("mock-student-3", "petra.novak@skole.hr", "Petra Novak", "učenik", note="1.A"),

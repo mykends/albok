@@ -1,5 +1,5 @@
 """Development data for the mock login: one school year, two classes, the mock users, a timetable and
-two published books. Runs once, on an empty database, when ALBOK_MOCK_OIDC=1."""
+three published books. Runs once, on an empty database, when ALBOK_MOCK_OIDC=1."""
 
 import logging
 from datetime import date
@@ -19,13 +19,15 @@ SAMPLES = Path(__file__).resolve().parent.parent / "samples"
 ROSTER = """korisnik;ime i prezime;uloga;razred
 ivana.horvat@skole.hr;Ivana Horvat;profesor;
 marko.kovac@skole.hr;Marko Kovač;profesor;
+maja.juric@skole.hr;Maja Jurić;profesor;
 luka.babic@skole.hr;Luka Babić;učenik;3.B
 ana.maric@skole.hr;Ana Marić;učenik;3.B
 petra.novak@skole.hr;Petra Novak;učenik;1.A
 """
 PERIODS = ["08:00-08:45", "08:50-09:35", "09:40-10:25", "10:40-11:25", "11:30-12:15", "12:20-13:05", "13:10-13:55"]
 SUBJECTS = [("Povijest", "ivana.horvat@skole.hr"), ("Matematika", "marko.kovac@skole.hr"),
-            ("Geografija", "ivana.horvat@skole.hr"), ("Fizika", "marko.kovac@skole.hr")]  # fmt: skip
+            ("Geografija", "ivana.horvat@skole.hr"), ("Fizika", "marko.kovac@skole.hr"),
+            ("Engleski jezik", "maja.juric@skole.hr")]  # fmt: skip
 
 HISTORY_TEXT = """# Povijest 3
 
@@ -106,9 +108,12 @@ def seed_if_empty(engine: Engine, clock: Clock) -> None:
         b3 = session.exec(select(SchoolClass).where(SchoolClass.name == "3.B")).one()
         math = session.exec(select(Subject).where(Subject.timetable_name == "Matematika")).one()
         history = session.exec(select(Subject).where(Subject.timetable_name == "Povijest")).one()
+        english = session.exec(select(Subject).where(Subject.timetable_name == "Engleski jezik")).one()
         math.color, math.icon, math.description = "#2563eb", "calculator", "Algebra i funkcije"
         history.color, history.icon, history.description = "#d97706", "landmark", "19. stoljeće"
-        session.add_all([math, history])
+        english.color, english.icon, english.description = "#7c3aed", "languages", "Gramatika i vokabular"
+        session.add_all([math, history, english])
         session.commit()
         _add_book(session, engine, math, "Osnove algebre", "algebra-basics.md", (SAMPLES / "algebra-basics.md").read_text(), [b3])
         _add_book(session, engine, history, "Povijest 3", "povijest-3.md", HISTORY_TEXT, [b3])
+        _add_book(session, engine, english, "English Grammar Basics", "english-grammar-basics.md", (SAMPLES / "english-grammar-basics.md").read_text(), [b3])

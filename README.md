@@ -51,12 +51,13 @@ npm run dev         # API on :8765 (mock login, demo data) + web app on http://l
 npm test            # backend tests + frontend typecheck
 ```
 
-`npm run dev` starts the API with `ALBOK_MOCK_OIDC=1`. The sign-in button leads to a page where you pick a seeded user: an admin, two professors (Ivana Horvat, Marko Kovač), three students in 3.B and 1.A, and one user who is not on the roster. The first start seeds a school year, a timetable (Mon–Fri, 08:00–13:55) and two published books.
+`npm run dev` starts the API with `ALBOK_MOCK_OIDC=1`. The sign-in button leads to a page where you pick a seeded user: an admin, three professors (Ivana Horvat, Marko Kovač, Maja Jurić for Engleski jezik), three students in 3.B and 1.A, and one user who is not on the roster. The first start seeds a school year, a timetable (Mon–Fri, 08:00–13:55) and three published books.
 
 Lessons only exist during school hours. To try the lesson view at any time, set a starting time for the server clock:
 
 ```bash
-ALBOK_FAKE_NOW=2026-10-20T09:45 npm run dev    # a Tuesday during 3.B's Povijest lesson
+ALBOK_FAKE_NOW=2026-10-20T10:45 npm run dev    # a Tuesday during 3.B's Povijest lesson
+ALBOK_FAKE_NOW=2026-10-20T09:45 npm run dev    # the same day, during 3.B's Engleski jezik lesson
 ```
 
 Delete `backend/data/` to start over.
