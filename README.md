@@ -120,4 +120,4 @@ All settings are environment variables; see [`backend/albok_api/config.py`](back
 
 ## Fonts
 
-PDFs made by the server use Noto Sans (`backend/albok_api/fonts/`, SIL Open Font License, see `OFL.txt`) so Croatian letters render everywhere.
+PDFs made by the server use Noto Sans, with Noto Sans Math for arrows and maths symbols (`backend/albok_api/fonts/`, SIL Open Font License, see `OFL.txt`), so Croatian letters and symbols render everywhere.

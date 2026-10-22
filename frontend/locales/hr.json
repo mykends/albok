@@ -36,7 +36,9 @@
     "administration": "Administracija",
     "forProfessors": "Za nastavnike",
     "forAdmins": "Administracija",
-    "currentLesson": "Trenutni sat"
+    "currentLesson": "Trenutni sat",
+    "menu": "Izbornik",
+    "subjects": "Predmeti"
   },
   "login": {
     "title": "Prijava",
@@ -82,8 +84,12 @@
     "pdfError": "Stranice se ne mogu prikazati. Pokušajte ponovno.",
     "zoomIn": "Povećaj",
     "zoomOut": "Smanji",
-    "showNotes": "Prikaži bilješke",
-    "hideNotes": "Sakrij bilješke",
+    "layout": {
+      "title": "Raspored zaslona",
+      "hidden": "Samo gradivo",
+      "side": "Bilješke sa strane",
+      "half": "Podijeljeni zaslon 50/50"
+    },
     "previous": "Prethodna",
     "next": "Sljedeća",
     "position": "Cjelina {{index}} od {{total}} · {{pages}} str.",
@@ -94,6 +100,21 @@
     "earlier": "Prijašnji satovi",
     "subjectNotes": "Bilješke iz predmeta",
     "placeholder": "Pišite bilješke…",
+    "page": "{{page}} / {{pages}}",
+    "previousPage": "Prethodna stranica",
+    "nextPage": "Sljedeća stranica",
+    "format": {
+      "toolbar": "Oblikovanje teksta",
+      "title": "Naslov",
+      "subtitle": "Podnaslov",
+      "bold": "Podebljano",
+      "italic": "Kurziv",
+      "underline": "Podcrtano",
+      "alignLeft": "Poravnaj lijevo",
+      "alignCenter": "Centriraj",
+      "alignRight": "Poravnaj desno",
+      "list": "Grafičke oznake"
+    },
     "empty": "Nema teksta.",
     "readOnly": "Tijekom sata možete uređivati samo bilješku ovog sata.",
     "noneForSubject": "Još nema bilješki iz ovog predmeta.",

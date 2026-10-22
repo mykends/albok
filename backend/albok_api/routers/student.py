@@ -20,6 +20,7 @@ from ..models import (
     TeachingAssignment,
     User,
 )
+from ..note_html import clean_note
 from ..schemas import (
     CurrentLesson,
     NoteRead,
@@ -218,7 +219,7 @@ def write_note(
         note = Note(student_id=user.id, lesson_id=lesson.id)
     elif not scope.can_edit_note(lesson):
         raise HTTPException(status_code=403, detail="Tijekom sata možete uređivati samo bilješku ovog sata.")
-    note.content = body.content
+    note.content = clean_note(body.content)
     note.updated_at = now.astimezone(timezone.utc)
     session.add(note)
     session.commit()

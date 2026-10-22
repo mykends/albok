@@ -86,7 +86,7 @@ function ReportView({ report }: { report: ImportReport }) {
         <Icon
           as={report.errors.length ? CircleAlert : CircleCheck}
           size={16}
-          className={report.errors.length ? 'text-destructive' : 'text-green-600'}
+          className={report.errors.length ? 'text-destructive' : 'text-success'}
         />
         <Text className="font-medium">
           {report.errors.length
@@ -111,7 +111,7 @@ function ReportView({ report }: { report: ImportReport }) {
       ))}
       {report.warnings.map((issue, n) => (
         <View key={`w${n}`} className="flex-row gap-1.5">
-          <Icon as={TriangleAlert} size={14} className="mt-0.5 text-amber-600" />
+          <Icon as={TriangleAlert} size={14} className="mt-0.5 text-warning" />
           <Text className="flex-1 text-sm">
             {issue.line ? t('admin.import.line', { line: issue.line }) : ''}
             {issue.message}

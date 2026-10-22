@@ -1,0 +1,77 @@
+/* Lesson notes in the notes editor (components/rich-note-editor.tsx). One typeface everywhere, the same
+   system font as the rest of the app: a title and a subtitle differ only in size and weight. */
+.note-content {
+  outline: none;
+  padding: 0 0.75rem;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-size: 1rem;
+  line-height: 1.5rem;
+  color: hsl(var(--foreground));
+}
+
+.note-content p {
+  margin: 0;
+}
+
+.note-content h1 {
+  margin: 0.75rem 0 0.25rem;
+  font-size: 1.5rem;
+  line-height: 2rem;
+  font-weight: 700;
+}
+
+.note-content h2 {
+  margin: 0.5rem 0 0.125rem;
+  font-size: 1.1875rem;
+  line-height: 1.75rem;
+  font-weight: 600;
+}
+
+.note-content > :first-child {
+  margin-top: 0;
+}
+
+.note-content ul,
+.note-content ol {
+  margin: 0.125rem 0;
+  padding-left: 1.5rem;
+}
+
+.note-content ul {
+  list-style: disc;
+}
+
+.note-content ol {
+  list-style: decimal;
+}
+
+.note-content strong {
+  font-weight: 700;
+}
+
+.note-content em {
+  font-style: italic;
+}
+
+.note-content u {
+  text-decoration: underline;
+}
+
+.note-content .is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  color: hsl(var(--muted-foreground));
+  pointer-events: none;
+}
+
+/* Outside pages the writing area fills its frame, so clicking anywhere in it starts writing. */
+.note-flow {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
+.note-flow > .note-content {
+  flex: 1 1 auto;
+}

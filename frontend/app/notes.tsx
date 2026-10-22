@@ -217,7 +217,7 @@ function ExportDialog({
           )}
         </View>
         <Text className="text-xs text-muted-foreground">{t('export.limitNote')}</Text>
-        {result && <Text className="text-sm text-green-700 dark:text-green-400">{result}</Text>}
+        {result && <Text className="text-sm text-success">{result}</Text>}
         {error && <Text className="text-sm text-destructive">{error}</Text>}
         <DialogFooter>
           <Button variant="outline" onPress={() => onOpenChange(false)}>

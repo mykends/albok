@@ -1,4 +1,5 @@
 import { SignOutButton } from '@/components/sign-out-button';
+import { SectionList } from '@/components/student-home';
 import { SubjectIcon } from '@/components/subject-icon';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { WebToolLayer } from '@/components/web-tools/web-tool-layer';
@@ -16,6 +17,8 @@ import { Link, useGlobalSearchParams, usePathname, type Href } from 'expo-router
 import {
   BookOpen,
   CalendarDays,
+  ChevronDown,
+  ChevronRight,
   Clock,
   GraduationCap,
   HardDrive,
@@ -27,15 +30,19 @@ import {
   Users,
   type LucideIcon,
 } from 'lucide-react-native';
-import { useEffect, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
+import { Platform, Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
 
 const COMPACT_BELOW = 900;
 // Lessons change on the bell; polling this often keeps the time rule visible within seconds.
 const STUDENT_POLL_MS = 20_000;
 // During a lesson the open web tools are polled faster, so opening or closing one reaches students in seconds.
 const WEB_TOOLS_POLL_MS = 5_000;
+// The pointer has to rest on the left edge this long, so passing by on the way to a button doesn't open the menu.
+const MENU_OPEN_DELAY_MS = 150;
+// Leaving the menu briefly (overshooting it, or crossing to it from the edge) doesn't close it yet.
+const MENU_CLOSE_DELAY_MS = 300;
 // Shows the "Current lesson" entry and keeps the home panel's lessons fresh.
 const PROFESSOR_POLL_MS = 20_000;
 
@@ -63,14 +70,10 @@ function Logo({ subtitle }: { subtitle?: string }) {
 // --- Students ---------------------------------------------------------------------------------
 
 function StudentShell({ children }: { children: ReactNode }) {
-  const { t } = useTranslation();
-  const me = useSession((state) => state.me)!;
   const now = useStudent((state) => state.now);
   const refresh = useStudent((state) => state.refresh);
   const pollWebTools = useWebTools((state) => state.poll);
   const clearWebTools = useWebTools((state) => state.clear);
-  const pathname = usePathname();
-  const { width } = useWindowDimensions();
   const lessonId = now?.lesson?.id ?? null;
 
   useEffect(() => {
@@ -90,66 +93,156 @@ function StudentShell({ children }: { children: ReactNode }) {
     };
   }, [lessonId, pollWebTools, clearWebTools]);
 
+  // No bars: the material gets the whole screen, and navigation waits behind the left edge.
   return (
     <View className="flex-1 bg-background">
-      <View className="flex-row items-center gap-4 border-b border-border bg-muted/40 px-4 py-2.5">
-        <Logo />
-        <View className="flex-row gap-1">
-          <TopLink
-            href="/"
-            icon={BookOpen}
-            label={t('nav.material')}
-            active={pathname === '/' || pathname.startsWith('/read') || pathname === '/lesson'}
-          />
-          <TopLink href="/notes" icon={NotebookPen} label={t('nav.notebook')} active={pathname === '/notes'} />
-        </View>
-        <View className="flex-1 items-center">
-          {now && (
-            <View
-              className={cn(
-                'flex-row items-center gap-2 rounded-full px-3 py-1',
-                now.lesson ? 'bg-primary' : 'bg-secondary'
-              )}>
-              <Icon as={Clock} size={14} className={now.lesson ? 'text-primary-foreground' : 'text-muted-foreground'} />
-              <Text className={cn('text-sm', now.lesson ? 'font-medium text-primary-foreground' : 'text-muted-foreground')}>
-                {now.lesson
-                  ? t('lesson.now', {
-                      subject: now.lesson.subject_name,
-                      start: formatTime(now.lesson.starts_at),
-                      end: formatTime(now.lesson.ends_at),
-                    })
-                  : t('lesson.free')}
-              </Text>
-            </View>
-          )}
-        </View>
-        {width >= COMPACT_BELOW && (
-          <Text className="text-sm text-muted-foreground" numberOfLines={1}>
-            {me.display_name}
-            {me.class_names.length ? ` · ${me.class_names.join(', ')}` : ''}
-          </Text>
-        )}
-        <SignOutButton compact={width < COMPACT_BELOW} />
-      </View>
       <View className="flex-1">{children}</View>
       <WebToolLayer />
       <WebToolNotice />
+      {/* After the tool layer, so the edge still opens the menu while a tool fills the screen. */}
+      <StudentMenu />
     </View>
   );
 }
 
-function TopLink({ href, icon, label, active }: { href: Href; icon: LucideIcon; label: string; active: boolean }) {
+/** Students' navigation, floating over the material. Resting the pointer on the left edge (or pressing
+ * the handle there) opens it; leaving it, Escape, or opening a screen closes it. */
+function StudentMenu() {
+  const { t } = useTranslation();
+  const me = useSession((state) => state.me)!;
+  const now = useStudent((state) => state.now);
+  const pathname = usePathname();
+  const [open, setOpen] = useState(false);
+  const [expanded, setExpanded] = useState<number | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const subjects = now?.subjects ?? [];
+  const onlySubjectId = subjects.length === 1 ? subjects[0].id : null;
+
+  const later = (next: boolean, delay: number) => {
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => setOpen(next), delay);
+  };
+  const close = useCallback(() => {
+    clearTimeout(timer.current);
+    setOpen(false);
+  }, []);
+
+  useEffect(() => () => clearTimeout(timer.current), []);
+  useEffect(() => close(), [pathname, close]);
+
+  // During a lesson there is only the lesson's subject, so its sections are shown straight away.
+  useEffect(() => {
+    if (onlySubjectId !== null) setExpanded(onlySubjectId);
+  }, [onlySubjectId]);
+
+  useEffect(() => {
+    if (!open || Platform.OS !== 'web') return;
+    const onKeyDown = (event: KeyboardEvent) => event.key === 'Escape' && close();
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [open, close]);
+
   return (
-    <Link href={href} asChild>
+    <View
+      className="absolute inset-y-0 left-0 z-50 w-2"
+      onPointerEnter={() => (open ? clearTimeout(timer.current) : later(true, MENU_OPEN_DELAY_MS))}
+      onPointerLeave={() => later(false, MENU_CLOSE_DELAY_MS)}>
       <Pressable
+        role="button"
+        accessibilityLabel={t('nav.menu')}
+        onPress={() => later(true, 0)}
         className={cn(
-          'flex-row items-center gap-2 rounded-md px-3 py-1.5 web:transition-colors web:hover:bg-accent',
-          active && 'bg-accent'
+          'absolute left-0 top-1/2 -mt-6 h-12 w-4 items-center justify-center rounded-r-md border border-l-0 border-border bg-muted web:transition-opacity',
+          open && 'opacity-0'
         )}>
-        <Icon as={icon} size={16} />
-        <Text className={cn('text-sm', active ? 'font-semibold' : 'text-foreground/80')}>{label}</Text>
+        <Icon as={ChevronRight} size={12} className="text-muted-foreground" />
       </Pressable>
-    </Link>
+      {open && (
+        <View className="absolute bottom-2 left-2 top-2 w-80 rounded-xl border border-border bg-popover shadow-xl shadow-black/10 web:animate-in web:fade-in-0 web:slide-in-from-left-2">
+          <View className="gap-3 border-b border-border p-4">
+            <Logo />
+            {now && (
+              <View
+                className={cn(
+                  'flex-row items-center gap-2 self-start rounded-full px-3 py-1',
+                  now.lesson ? 'bg-primary' : 'bg-secondary'
+                )}>
+                <Icon as={Clock} size={14} className={now.lesson ? 'text-primary-foreground' : 'text-muted-foreground'} />
+                <Text className={cn('text-sm', now.lesson ? 'font-medium text-primary-foreground' : 'text-muted-foreground')}>
+                  {now.lesson
+                    ? t('lesson.now', {
+                        subject: now.lesson.subject_name,
+                        start: formatTime(now.lesson.starts_at),
+                        end: formatTime(now.lesson.ends_at),
+                      })
+                    : t('lesson.free')}
+                </Text>
+              </View>
+            )}
+          </View>
+          <ScrollView className="flex-1" contentContainerClassName="gap-1 p-3">
+            <NavItem
+              href="/"
+              label={t('nav.material')}
+              compact={false}
+              active={pathname === '/' || pathname.startsWith('/read') || pathname === '/lesson'}
+              leading={<NavIcon icon={BookOpen} />}
+            />
+            <NavItem
+              href="/notes"
+              label={t('nav.notebook')}
+              compact={false}
+              active={pathname === '/notes'}
+              leading={<NavIcon icon={NotebookPen} />}
+            />
+            {subjects.length > 0 && <SectionLabel compact={false} label={t('nav.subjects')} />}
+            {subjects.map((subject) => (
+              <View key={subject.id}>
+                <Pressable
+                  role="button"
+                  aria-expanded={expanded === subject.id}
+                  onPress={() => setExpanded(expanded === subject.id ? null : subject.id)}
+                  className="flex-row items-center gap-3 rounded-md px-2 py-1.5 web:transition-colors web:hover:bg-accent">
+                  <SubjectIcon subject={subject} size="sm" />
+                  <Text className="flex-1 text-sm text-foreground/80" numberOfLines={1}>
+                    {subject.name}
+                  </Text>
+                  <Icon
+                    as={expanded === subject.id ? ChevronDown : ChevronRight}
+                    size={16}
+                    className="text-muted-foreground"
+                  />
+                </Pressable>
+                {expanded === subject.id && (
+                  <View className="pb-2 pl-4 pt-2">
+                    {subject.sections.length ? (
+                      <SectionList sections={subject.sections} />
+                    ) : (
+                      <Text className="px-2 text-sm text-muted-foreground">{t('student.nothingPublished')}</Text>
+                    )}
+                  </View>
+                )}
+              </View>
+            ))}
+          </ScrollView>
+          <View className="gap-1 border-t border-border p-3">
+            <Text className="px-3 pb-1 text-sm text-muted-foreground" numberOfLines={1}>
+              {me.display_name}
+              {me.class_names.length ? ` · ${me.class_names.join(', ')}` : ''}
+            </Text>
+            <SignOutButton />
+          </View>
+        </View>
+      )}
+    </View>
+  );
+}
+
+function NavIcon({ icon }: { icon: LucideIcon }) {
+  return (
+    <View className="size-7 items-center justify-center">
+      <Icon as={icon} size={16} />
+    </View>
   );
 }
 
@@ -240,11 +333,7 @@ function StaffShell({ children }: { children: ReactNode }) {
                   label={t(label)}
                   compact={compact}
                   active={pathname === '/admin' && adminTab === tab}
-                  leading={
-                    <View className="size-7 items-center justify-center">
-                      <Icon as={icon} size={16} />
-                    </View>
-                  }
+                  leading={<NavIcon icon={icon} />}
                 />
               ))}
             </>

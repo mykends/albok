@@ -9,15 +9,31 @@ from datetime import date
 from pathlib import Path
 
 import markdown as md
-from fpdf import FPDF, FontFace
+from fpdf import FPDF, FontFace, TextStyle
+from fpdf.html import DEFAULT_TAG_STYLES
 
 from .clock import format_lesson_date
 from .importers import MD_HEADING, _heading_level
+from .note_html import is_formatted, note_pdf_html
 
 FONTS = Path(__file__).resolve().parent / "fonts"
 FAMILY = "NotoSans"
 MONO = "NotoSansMono"
-CODE_STYLES = {"code": FontFace(family=MONO), "pre": FontFace(family=MONO)}
+SYMBOLS = "NotoSansMath"
+# fpdf2 prints headings dark red, quotes maroon and bullets red; the material should look like plain print.
+TEXT_COLOR = "#000000"
+QUOTE_COLOR = "#5a5a5a"
+HTML_STYLES = {
+    "code": FontFace(family=MONO),
+    "pre": FontFace(family=MONO),
+    "blockquote": DEFAULT_TAG_STYLES["blockquote"].replace(color=QUOTE_COLOR),
+    **{f"h{n}": DEFAULT_TAG_STYLES[f"h{n}"].replace(color=TEXT_COLOR) for n in range(1, 7)},
+}
+# A note's title and subtitle, sized to sit under the lesson heading (12 pt) in the exported notebook.
+NOTE_STYLES = {
+    "h1": TextStyle(font_style="B", font_size_pt=15, color=TEXT_COLOR, t_margin=3, b_margin=1),
+    "h2": TextStyle(font_style="B", font_size_pt=12.5, color=TEXT_COLOR, t_margin=2, b_margin=0.5),
+}
 
 
 def _pdf(title: str = "") -> FPDF:
@@ -27,6 +43,9 @@ def _pdf(title: str = "") -> FPDF:
     pdf.add_font(FAMILY, "I", FONTS / "NotoSans-Italic.ttf")
     pdf.add_font(FAMILY, "BI", FONTS / "NotoSans-BoldItalic.ttf")
     pdf.add_font(MONO, "", FONTS / "NotoSansMono-Regular.ttf")
+    # Arrows and maths symbols (→, ≤, ≠ …), which the notes editor types for students; Noto Sans has none.
+    pdf.add_font(SYMBOLS, "", FONTS / "NotoSansMath-Regular.ttf")
+    pdf.set_fallback_fonts([SYMBOLS], exact_match=False)
     pdf.set_font(FAMILY, size=11)
     pdf.set_margins(20, 18, 20)
     pdf.set_auto_page_break(True, margin=18)
@@ -71,7 +90,7 @@ def text_to_pdf(text: str, title: str, out: Path) -> None:
             pdf.set_font(FAMILY, size=11)
         if body.strip():
             html = md.markdown(body, extensions=["tables", "fenced_code", "sane_lists"])
-            pdf.write_html(html, font_family=FAMILY, tag_styles=CODE_STYLES)
+            pdf.write_html(html, font_family=FAMILY, tag_styles=HTML_STYLES, li_prefix_color=TEXT_COLOR)
             pdf.ln(3)
             page_has_body = True
     pdf.output(str(out))
@@ -169,8 +188,15 @@ def notebook_pdf(student_name: str, subjects: list[NotebookSubject], out: Path, 
                 pdf.multi_cell(0, 5.5, "Gradivo: " + ", ".join(lesson.section_titles), new_x="LMARGIN", new_y="NEXT")
                 pdf.set_text_color(0)
             pdf.set_font(FAMILY, size=11)
-            content = _printable(lesson.content.strip())
-            if content:
+            if is_formatted(lesson.content):
+                pdf.ln(1)
+                pdf.write_html(
+                    _printable(note_pdf_html(lesson.content)),
+                    font_family=FAMILY,
+                    tag_styles=NOTE_STYLES,
+                    li_prefix_color=TEXT_COLOR,
+                )
+            elif content := _printable(lesson.content.strip()):
                 pdf.ln(1)
                 pdf.multi_cell(0, 6, content, new_x="LMARGIN", new_y="NEXT")
             pdf.ln(5)
