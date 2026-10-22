@@ -12,7 +12,7 @@ import { ThemeProvider } from 'expo-router/react-navigation';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
 import { useEffect } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, useColorScheme as useSystemColorScheme, View } from 'react-native';
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -21,14 +21,17 @@ export {
 
 export default function RootLayout() {
   const { colorScheme, setColorScheme } = useColorScheme();
+  const systemScheme = useSystemColorScheme();
   const preferredScheme = usePreferencesStore((state) => state.colorScheme);
   const status = useSession((state) => state.status);
   const me = useSession((state) => state.me);
   const load = useSession((state) => state.load);
 
+  // NativeWind's "system" leaves out the `dark` class on web, so the CSS colors would stay light while
+  // `colorScheme` (and with it the navigation theme) turns dark. Passing the resolved scheme keeps them together.
   useEffect(() => {
-    setColorScheme(preferredScheme);
-  }, [preferredScheme, setColorScheme]);
+    setColorScheme(preferredScheme === 'system' ? (systemScheme === 'dark' ? 'dark' : 'light') : preferredScheme);
+  }, [preferredScheme, systemScheme, setColorScheme]);
 
   useEffect(() => {
     load();

@@ -160,7 +160,7 @@ export function PresetsTab({
           ))}
         <Text className="text-sm text-muted-foreground">{t('presets.selected', { count: selected.size })}</Text>
       </View>
-      {message && <Text className="text-sm text-green-700 dark:text-green-400">{message}</Text>}
+      {message && <Text className="text-sm text-success">{message}</Text>}
       {error && <Text className="text-sm text-destructive">{error}</Text>}
     </View>
   );

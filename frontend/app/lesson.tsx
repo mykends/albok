@@ -13,7 +13,7 @@ import Head from 'expo-router/head';
 import { AppWindow } from 'lucide-react-native';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useWindowDimensions, View } from 'react-native';
+import { View } from 'react-native';
 
 /** The lesson's web tools when no section is open in the reader, with the lesson note beside them. */
 export default function LessonScreen() {
@@ -22,8 +22,7 @@ export default function LessonScreen() {
   const tools = useWebTools((state) => state.tools);
   const toolActive = useWebTools(isToolActive);
   const setActive = useWebTools((state) => state.setActive);
-  const notesPanelOpen = usePreferencesStore((state) => state.notesPanelOpen);
-  const { width } = useWindowDimensions();
+  const notesLayout = usePreferencesStore((state) => state.notesLayout);
   const available = webToolMode() === 'tabs' && lesson !== null && tools.length > 0;
   // Set when the student picks the material tab, so the tool isn't chosen again on the way out.
   const leaving = useRef(false);
@@ -63,11 +62,8 @@ export default function LessonScreen() {
           />
           <WebToolPlaceholder />
         </View>
-        {notesPanelOpen && (
-          <LessonNotePane
-            subjectId={lesson.subject_id}
-            className={width < 1100 ? 'w-80' : 'w-[26rem]'}
-          />
+        {notesLayout !== 'hidden' && (
+          <LessonNotePane subjectId={lesson.subject_id} half={notesLayout === 'half'} />
         )}
       </View>
     </View>

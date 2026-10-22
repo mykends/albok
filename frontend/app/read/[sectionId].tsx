@@ -8,10 +8,11 @@ import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api, ApiError, type ReaderSection } from '@/lib/api';
 import { errorMessage } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
-import { READER_ZOOM, usePreferencesStore } from '@/stores/preferences-store';
+import { READER_ZOOM, usePreferencesStore, type NotesLayout } from '@/stores/preferences-store';
 import { useSession } from '@/stores/session-store';
 import { useStudent } from '@/stores/student-store';
 import { isToolActive, useWebTools } from '@/stores/web-tools-store';
@@ -22,15 +23,17 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleAlert,
+  Columns2,
   Eye,
   PanelRight,
-  PanelRightClose,
+  Square,
   ZoomIn,
   ZoomOut,
+  type LucideIcon,
 } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Platform, useWindowDimensions, View } from 'react-native';
+import { Platform, View } from 'react-native';
 
 export default function ReaderScreen() {
   const { t } = useTranslation();
@@ -78,7 +81,8 @@ export default function ReaderScreen() {
       </View>
     );
   }
-  if (!section || section.id !== sectionId) {
+  // While the next section loads the open one stays up, so paging swaps only the material.
+  if (!section) {
     return (
       <View className="flex-1 gap-4 p-10">
         <Skeleton className="h-8 w-96 rounded-lg" />
@@ -101,17 +105,13 @@ function Reader({
   const { t } = useTranslation();
   const zoom = usePreferencesStore((state) => state.readerZoom);
   const changeZoom = usePreferencesStore((state) => state.changeReaderZoom);
-  const notesPanelOpen = usePreferencesStore((state) => state.notesPanelOpen);
-  const toggleNotesPanel = usePreferencesStore((state) => state.toggleNotesPanel);
+  const notesLayout = usePreferencesStore((state) => state.notesLayout);
   const toolOpen = useWebTools(isToolActive);
-  const { width } = useWindowDimensions();
 
+  // New params on the same screen (keeping `preview`): replacing the route would remount the header and notes too.
   const go = (id: number | null) => {
     if (id === null) return;
-    router.replace({
-      pathname: '/read/[sectionId]',
-      params: previewClassId ? { sectionId: String(id), preview: String(previewClassId) } : { sectionId: String(id) },
-    });
+    router.setParams({ sectionId: String(id) });
   };
 
   // ← / → move between sections while not typing.
@@ -175,15 +175,7 @@ function Reader({
             onPress={() => changeZoom(1)}>
             <Icon as={ZoomIn} size={18} />
           </Button>
-          {showNotes && (
-            <Button
-              variant="ghost"
-              size="icon"
-              accessibilityLabel={notesPanelOpen ? t('reader.hideNotes') : t('reader.showNotes')}
-              onPress={toggleNotesPanel}>
-              <Icon as={notesPanelOpen ? PanelRightClose : PanelRight} size={18} />
-            </Button>
-          )}
+          {showNotes && <NotesLayoutPicker />}
         </View>
       </View>
 
@@ -213,10 +205,46 @@ function Reader({
             </View>
           </View>
         </View>
-        {showNotes && notesPanelOpen && (
-          <LessonNotePane subjectId={section.subject.id} className={width < 1100 ? 'w-80' : 'w-[26rem]'} />
+        {showNotes && notesLayout !== 'hidden' && (
+          <LessonNotePane subjectId={section.subject.id} half={notesLayout === 'half'} />
         )}
       </View>
+    </View>
+  );
+}
+
+const NOTES_LAYOUTS: { value: NotesLayout; icon: LucideIcon; label: string }[] = [
+  { value: 'hidden', icon: Square, label: 'reader.layout.hidden' },
+  { value: 'side', icon: PanelRight, label: 'reader.layout.side' },
+  { value: 'half', icon: Columns2, label: 'reader.layout.half' },
+];
+
+/** The student chooses what gets the screen: only the material, the material with notes beside it, or half each. */
+function NotesLayoutPicker() {
+  const { t } = useTranslation();
+  const notesLayout = usePreferencesStore((state) => state.notesLayout);
+  const setNotesLayout = usePreferencesStore((state) => state.setNotesLayout);
+  return (
+    <View role="radiogroup" aria-label={t('reader.layout.title')} className="ml-1 flex-row gap-0.5 rounded-lg bg-muted p-0.5">
+      {NOTES_LAYOUTS.map(({ value, icon, label }) => (
+        <Tooltip key={value}>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              role="radio"
+              aria-checked={notesLayout === value}
+              accessibilityLabel={t(label)}
+              className={cn('h-8 w-8 sm:h-8 sm:w-8', notesLayout === value && 'bg-background shadow-sm shadow-black/5')}
+              onPress={() => setNotesLayout(value)}>
+              <Icon as={icon} size={16} className={notesLayout === value ? 'text-foreground' : 'text-muted-foreground'} />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            <Text>{t(label)}</Text>
+          </TooltipContent>
+        </Tooltip>
+      ))}
     </View>
   );
 }

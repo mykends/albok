@@ -80,3 +80,38 @@ def test_exports_are_not_available_during_lessons_or_for_other_subjects(luka, sc
     db.add(other)
     db.commit()
     assert luka.post("/api/exports", json={"kind": "subject", "subject_id": other.id}).status_code == 422
+
+
+def test_formatted_notes_are_exported_as_text_with_their_formatting(luka, login, horvat, school, clock, data_dir):
+    write_history_note(luka, horvat, school, clock)
+    clock.set(datetime(2026, 10, 27, 8, 10))
+    luka = login("luka.babic@skole.hr")  # a new school day
+    lesson = luka.get("/api/student/now").json()["lesson"]
+    luka.put(
+        f"/api/lessons/{lesson['id']}/note",
+        json={"content": '<h1 style="text-align: center;">Ključni pojmovi</h1><ul><li><p>Parni stroj</p></li></ul><p></p><p>ugljen → para ⇒ rad, η ≤ 1, Δ ≠ 0, ≈ ±x²</p>'},
+    )
+    clock.set(datetime(2026, 10, 27, 9, 50))
+    luka.post("/api/exports", json={"kind": "subject", "subject_id": school.history.id})
+
+    [message] = outbox(data_dir)
+    text, _ = attachment_text(message)
+    assert "Watt je usavršio parni stroj." in text  # the older, plain-text note
+    assert "Ključni pojmovi" in text and "Parni stroj" in text
+    assert "ugljen → para ⇒ rad, η ≤ 1, Δ ≠ 0, ≈ ±x²" in text  # symbols come from the fallback font
+    assert "<" not in text
+
+
+def test_notes_with_only_empty_formatting_are_left_out(luka, login, horvat, school, clock, data_dir):
+    write_history_note(luka, horvat, school, clock)
+    clock.set(datetime(2026, 10, 27, 8, 10))
+    luka = login("luka.babic@skole.hr")  # a new school day
+    lesson = luka.get("/api/student/now").json()["lesson"]
+    luka.put(f"/api/lessons/{lesson['id']}/note", json={"content": "<p></p><h1></h1>"})
+    clock.set(datetime(2026, 10, 27, 9, 50))
+    luka.post("/api/exports", json={"kind": "subject", "subject_id": school.history.id})
+
+    [message] = outbox(data_dir)
+    text, _ = attachment_text(message)
+    assert "Povijest · uto 20. 10. 2026." in text
+    assert "Povijest · uto 27. 10. 2026." not in text

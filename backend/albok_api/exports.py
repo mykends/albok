@@ -14,6 +14,7 @@ from .config import settings
 from .documents import append_pages
 from .mailer import send_mail
 from .models import Book, BookFile, ExportLog, Lesson, Note, NoteSection, Section, Subject, TeachingAssignment, User
+from .note_html import note_text
 from .pdfgen import NotebookLesson, NotebookSubject, notebook_pdf
 
 log = logging.getLogger(__name__)
@@ -50,7 +51,7 @@ def _notebook(session: Session, student: User, subject: Subject) -> NotebookSubj
                 .order_by(Book.position, Section.position)
             ).all()
         )
-        if note.content.strip() or titles:
+        if note_text(note.content).strip() or titles:
             lessons.append(NotebookLesson(date=lesson.date, section_titles=titles, content=note.content))
     return NotebookSubject(name=subject.name, lessons=lessons)
 

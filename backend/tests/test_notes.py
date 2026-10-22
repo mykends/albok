@@ -120,3 +120,29 @@ def test_professors_have_no_access_to_student_notes(horvat, luka, school, clock)
     luka.put(f"/api/lessons/{lesson['id']}/note", json={"content": "privatno"})
     assert horvat.get(f"/api/lessons/{lesson['id']}/note").status_code == 403
     assert horvat.get("/api/student/notes").status_code == 403
+
+
+def test_formatted_notes_keep_only_the_editors_formatting(luka, school, clock):
+    clock.set(datetime(2026, 10, 20, 8, 10))
+    lesson = current_lesson(luka)
+    written = (
+        '<h1 style="text-align: center;">Parni stroj</h1>'
+        '<p>James <strong>Watt</strong>, <em>1769.</em> <u>važno</u></p>'
+        '<ul><li><p>tvornice</p></li></ul><p style="text-align: right;">kraj</p>'
+    )
+    assert luka.put(f"/api/lessons/{lesson['id']}/note", json={"content": written}).json()["content"] == written
+
+    sneaky = (
+        '<p style="font-family: Comic Sans; color: red" onclick="steal()">tekst<script>alert(1)</script>'
+        '<img src="file:///etc/passwd"><span style="font-size: 40px">veliko</span></p>'
+        '<h3>naslov</h3><p style="text-align: justify">poravnato</p>'
+    )
+    saved = luka.put(f"/api/lessons/{lesson['id']}/note", json={"content": sneaky}).json()
+    assert saved["content"] == "<p>tekstveliko</p>naslov<p>poravnato</p>"
+
+
+def test_plain_text_notes_are_stored_as_written(luka, school, clock):
+    clock.set(datetime(2026, 10, 20, 8, 10))
+    lesson = current_lesson(luka)
+    text = "a < b, <b>nije oblikovano</b>\n<p>"
+    assert luka.put(f"/api/lessons/{lesson['id']}/note", json={"content": text}).json()["content"] == text
