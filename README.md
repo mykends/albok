@@ -1,6 +1,6 @@
 # Albok
 
-Albok is a school-wide class companion for one school. Professors upload material and publish it, section by section, to the classes they teach. Students sign in on locked-down school PCs with AAI@EduHr, read what is published for the lesson they are in right now, and keep one note per lesson.
+Albok is a school-wide class companion for one school. Professors upload material and publish it, section by section, to the classes they teach. Students sign in on locked-down school PCs with AAI@EduHr, read what is published for the lesson they are in right now, and keep one note per lesson. FREE TO USE THE CODE IF YOU HAVE AN OPPORTUNITY TO IMPROVE EDUCATION IN CROATIA.
 
 The design is in [docs/specs/professor-student-roles.md](docs/specs/professor-student-roles.md). School IT installs and runs it with [docs/deployment.md](docs/deployment.md).
 
